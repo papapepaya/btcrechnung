@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Einnahmen{% endblock %}
+{% block content %}
+
+<div class="page-header-row">
+    <h1>Einnahmen (Rechnungen)</h1>
+    <div style="display: flex; gap: 10px; align-items: center;">
+        <a href="/income/add" class="btn btn-primary">+ Manuell hinzufügen</a>
+        <div class="year-selector">
+            <select onchange="location.href='/income?year='+this.value">
+                {% for y in years %}
+                <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Rechnungsübersicht ({{ year }})</h2>
+    <div class="filters">
+        <a href="/income?year={{ year }}" class="filter-btn {% if not selected_month %}active{% endif %}">Alle</a>
+        {% for m in range(1, 13) %}
+        <a href="/income?year={{ year }}&month={{ m }}" class="filter-btn {% if selected_month == m %}active{% endif %}">{{ month_names[m-1] }}</a>
+        {% endfor %}
+    </div>
+    {% if invoices %}
+    <table>
+        <tr>
+            <th>Nr.</th>
+            <th>Datum</th>
+            <th>Kunde</th>
+            <th>Leistung</th>
+            <th style="text-align: right;">Betrag</th>
+            <th>Status</th>
+            <th></th>
+        </tr>
+        {% for inv in invoices %}
+        <tr>
+            <td style="font-weight: 500;">{{ inv.id }}</td>
+            <td>{{ inv.date[8:10] }}.{{ inv.date[5:7] }}.{{ inv.date[0:4] }}</td>
+            <td>{{ inv.customer_name }}</td>
+            <td>{{ inv.items_description[:50] }}{% if inv.items_description|length > 50 %}…{% endif %}</td>
+            <td style="text-align: right;" class="positive">{{ "%.2f"|format(inv.amount) }} €</td>
+            <td>
+                {% if inv.payment_received %}
+                <span class="badge badge-paid">Bezahlt</span>
+                {% if inv.get("payment_date") %}<br><span style="font-size: 0.75rem; color: var(--text-muted);">{{ inv.payment_date[8:10] }}.{{ inv.payment_date[5:7] }}.{{ inv.payment_date[0:4] }}</span>{% endif %}
+                {% if inv.get("payment_method") %}<br><span style="font-size: 0.75rem; color: var(--text-muted);">{{ payment_methods.get(inv.payment_method, inv.payment_method) }}</span>{% endif %}
+                {% else %}
+                <span class="badge badge-unpaid">Offen</span>
+                {% endif %}
+            </td>
+            <td style="text-align: right;">
+                {% if not inv.payment_received %}
+                <a href="/income/{{ inv.id }}/paid" class="btn btn-sm btn-secondary">Bezahlt</a>
+                {% else %}
+                <a href="/income/{{ inv.id }}/paid" class="btn btn-sm btn-secondary">Bearbeiten</a>
+                {% endif %}
+                <form method="POST" action="/income/{{ inv.id }}/delete" style="display:inline" onsubmit="return confirm('Rechnung wirklich löschen?')">
+                    <button type="submit" class="btn btn-sm btn-danger">Löschen</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+        <tr class="total-row">
+            <td colspan="4">Summe</td>
+            <td style="text-align: right;">{{ "%.2f"|format(total) }} €</td>
+            <td colspan="2"></td>
+        </tr>
+    </table>
+    {% else %}
+    <div class="no-data">Noch keine Rechnungen vorhanden.</div>
+    {% endif %}
+</div>
+{% endblock %}

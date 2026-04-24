@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page {
+            size: A4;
+            margin: 55px 55px 60px 55px;
+        }
+        body { font-family: 'Helvetica', sans-serif; color: #333; line-height: 1.4; font-size: 13px; margin-bottom: 30px; }
+
+        .header-table { width: 100%; border-bottom: 2px solid #000; padding-bottom: 15px; }
+        .header-table td { padding: 0; vertical-align: middle; border: none; }
+        .logo-container { margin-bottom: 15px; }
+        .logo-container img { display: block; }
+        .studio-info { text-align: right; }
+        .studio-name { font-size: 20px; font-weight: bold; text-transform: uppercase; margin-bottom: 3px; }
+        .slogan { font-size: 11px; color: #777; font-style: italic; }
+
+        .invoice-header-table { width: 100%; margin-top: 30px; }
+        .invoice-header-table td { padding: 0; vertical-align: top; border: none; }
+        .invoice-title { font-size: 18px; font-weight: bold; margin-bottom: 5px; }
+
+        .items-table { width: 100%; border-collapse: collapse; margin-top: 30px; }
+        .items-table th { background-color: #f8f8f8; text-align: left; padding: 10px; border-bottom: 2px solid #000; }
+        .items-table td { padding: 10px; border-bottom: 1px solid #eee; }
+
+        .totals { margin-top: 20px; text-align: right; font-size: 16px; font-weight: bold; }
+        .tax-note { font-size: 11px; color: #555; margin-top: 5px; text-align: right; font-weight: normal; }
+
+        .payment-section { margin-top: 25px; }
+        .payment-box { padding: 0; margin-bottom: 8px; }
+        .payment-title { font-weight: bold; font-size: 12px; margin-bottom: 2px; padding-bottom: 2px; border-bottom: 1px solid #ddd; }
+        .payment-title img { height: 14px; margin-right: 8px; vertical-align: middle; }
+
+        .qr-table { width: 100%; }
+        .qr-table td { padding: 0; vertical-align: top; border: none; }
+        .payment-details { font-size: 11px; line-height: 1.3; }
+        .qr-code img { width: 85px; border: 1px solid #ddd; background: white; padding: 2px; }
+
+        .address-box { font-family: monospace; background: #fff; border: 1px solid #ddd; padding: 3px; font-size: 10px; display: block; margin-top: 3px; word-break: break-all; }
+        .footer { position: fixed; bottom: 0; left: 0; right: 0; font-size: 9px; color: #aaa; text-align: center; border-top: 1px solid #eee; padding-top: 8px; }
+    </style>
+</head>
+<body>
+    <!-- Header: Logo + Firmeninfo nebeneinander -->
+    <table class="header-table">
+        <tr>
+            <td style="width: 50%; padding-bottom: 10px;">
+                <div class="logo-container">
+                    {% if logo_data %}
+                        <img src="{{ logo_data }}" alt="Logo">
+                    {% else %}
+                        <div class="studio-name">{{ studio_name }}</div>
+                    {% endif %}
+                </div>
+            </td>
+            <td style="width: 50%; padding-bottom: 10px;" class="studio-info">
+                <div class="studio-name">{{ studio_name }}</div>
+                {% if slogan %}<div class="slogan">{{ slogan }}</div>{% endif %}
+                <div style="font-size: 10px; color: #555; margin-top: 5px;">
+                    {% if studio_address %}{{ studio_address }}<br>{% endif %}
+                    {% if studio_phone %}{{ studio_phone }}{% endif %}{% if studio_phone and studio_email %} | {% endif %}{% if studio_email %}{{ studio_email }}{% endif %}
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <!-- Rechnungsempfänger + Rechnungsdaten nebeneinander -->
+    <table class="invoice-header-table">
+        <tr>
+            <td style="width: 50%;">
+                <strong>Rechnungsempf&auml;nger:</strong><br>
+                <div style="font-weight: bold; font-size: 14px; margin-top: 5px;">{{ customer_name }}</div>
+                {{ customer_address }}
+            </td>
+            <td style="width: 50%; text-align: right;">
+                <div class="invoice-title">RECHNUNG</div>
+                Nummer: {{ invoice_number }}<br>
+                Datum: {{ invoice_date }}
+            </td>
+        </tr>
+    </table>
+
+    <!-- Positionen -->
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th>Leistung</th>
+                <th>Menge</th>
+                <th>Einzelpreis</th>
+                {% if not is_kleinunternehmer %}<th>MwSt</th>{% endif %}
+                <th style="text-align: right;">Gesamt</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ item.description }}</td>
+                <td>{{ item.quantity }}</td>
+                <td>{{ "%.2f"|format(item.unit_price)|replace(".", ",") }} &euro;</td>
+                {% if not is_kleinunternehmer %}
+                <td>{{ "%.0f"|format(item.vat_rate * 100) }}%</td>
+                {% endif %}
+                <td style="text-align: right;">{{ "%.2f"|format(item.quantity * item.unit_price)|replace(".", ",") }} &euro;</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Summe -->
+    <div class="totals">
+        {% if is_kleinunternehmer %}
+        Gesamtbetrag: {{ "%.2f"|format(total_gross)|replace(".", ",") }} &euro;
+        <div class="tax-note">Umsatzsteuer wird nicht ausgewiesen (Kleinunternehmerregelung gemäß &sect; 19 UStG).</div>
+        {% else %}
+        Summe netto: {{ "%.2f"|format(total_net)|replace(".", ",") }} &euro;<br>
+        zzgl. MwSt.: {{ "%.2f"|format(total_vat)|replace(".", ",") }} &euro;<br>
+        <strong>Gesamtbetrag: {{ "%.2f"|format(total_gross)|replace(".", ",") }} &euro;</strong>
+        {% endif %}
+    </div>
+
+    <!-- Zahlungsoptionen untereinander -->
+    <div class="payment-section">
+        <div class="payment-box">
+            <div class="payment-title">Bank&uuml;berweisung</div>
+            <table class="qr-table">
+                <tr>
+                    <td class="payment-details" style="padding-right: 15px;">
+                        <strong>{{ bank_account_name or studio_name }}</strong><br>
+                        {{ bank_name }}<br>
+                        IBAN: {{ iban }}<br>
+                        BIC: {{ bic }}<br>
+                        Verwendung:<br>
+                        <span style="font-weight: bold;">{{ invoice_number }} {{ customer_name.split(' ')[-1] }}</span>
+                    </td>
+                    <td style="width: 95px;">
+                        <div class="qr-code">
+                            <img src="{{ bank_qr }}" alt="Bank QR">
+                            <div style="font-size: 8px; text-align: center; margin-top: 3px;">GiroCode scannen</div>
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        {% if btc_address %}
+        <div class="payment-box">
+                    <div class="payment-title">
+                        <span style="font-weight: bold; margin-right: 4px; color: #F7931A;">BTC</span> Bitcoin / Lightning
+                    </div>
+            <table class="qr-table">
+                <tr>
+                    <td class="payment-details" style="padding-right: 15px;">
+                        Betrag: <strong>{{ "%.8f"|format(total_btc) }} BTC</strong><br>
+                        <span style="color: #666;">(1 BTC &asymp; {{ "{:,.0f}".format(btc_rate)|replace(",", ".") }} &euro;)</span>
+                        {% if btc_discount_percent and btc_discount_percent != 0 %}
+                        <br><span style="color: #F7931A; font-size: 9px;">
+                            {% if btc_discount_percent < 0 %}&#10003; {{ "%.2f"|format(btc_discount_percent * -1) }}% Bitcoin-Rabatt{% else %}&#9888; +{{ "%.2f"|format(btc_discount_percent) }}% Bitcoin-Aufschlag{% endif %}
+                        </span>
+                        {% endif %}
+                        <br><br>
+                        <span style="font-size: 8px; color: #999;">{{ btc_address }}</span>
+                    </td>
+                    <td style="width: 95px;">
+                        <div class="qr-code">
+                            <img src="{{ qr_code }}" alt="Bitcoin QR">
+                            <div style="font-size: 8px; text-align: center; margin-top: 3px;">Mit Wallet scannen</div>
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="footer">
+        {% if tax_id %}
+        <div style="font-size: 9px; color: #777; margin-bottom: 3px;">
+            {% if business_type == 'regulaer' %}USt-IdNr.:{% else %}Steuernummer:{% endif %} {{ tax_id }}
+        </div>
+        {% endif %}
+        {{ studio_name }}{% if studio_address %} | {{ studio_address }}{% endif %}{% if studio_phone %} | Tel: {{ studio_phone }}{% endif %}{% if studio_email %} | {{ studio_email }}{% endif %}<br>
+        Diese Rechnung ist eine rechtsg&uuml;ltige E-Rechnung im ZUGFeRD 2.2 Format (factur-x.xml eingebettet).
+    </div>
+</body>
+</html>

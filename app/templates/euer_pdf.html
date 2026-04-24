@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: 'Helvetica', sans-serif; padding: 40px; color: #333; line-height: 1.5; font-size: 12px; }
+        h1 { font-size: 18px; text-align: center; margin-bottom: 5px; }
+        .subtitle { text-align: center; font-size: 12px; color: #666; margin-bottom: 30px; }
+        .header-info { margin-bottom: 30px; font-size: 11px; }
+        .header-info td { padding: 2px 8px 2px 0; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th { background: #f5f5f5; text-align: left; padding: 8px; border: 1px solid #ddd; font-size: 11px; }
+        td { padding: 8px; border: 1px solid #ddd; }
+        .line-num { width: 40px; text-align: center; color: #888; }
+        .amount { text-align: right; width: 120px; }
+        .section-header { background: #333; color: #fff; font-weight: bold; }
+        .section-header td { border-color: #333; }
+        .total-row { font-weight: bold; background: #f0f0f0; }
+        .total-row td { border-top: 2px solid #333; }
+        .result-box { margin-top: 30px; padding: 20px; border: 2px solid #333; text-align: center; }
+        .result-box .label { font-size: 14px; margin-bottom: 10px; }
+        .result-box .value { font-size: 24px; font-weight: bold; }
+        .result-box .value.positive { color: #080; }
+        .result-box .value.negative { color: #c00; }
+        .footer { margin-top: 40px; font-size: 9px; color: #aaa; text-align: center; border-top: 1px solid #eee; padding-top: 10px; }
+        .disclaimer { font-size: 10px; color: #666; margin-top: 20px; font-style: italic; }
+        .signature { margin-top: 60px; }
+        .signature-table { width: 100%; }
+        .signature-table td { width: 45%; border: none; padding: 0; }
+        .signature .line { border-top: 1px solid #333; margin-top: 40px; padding-top: 5px; font-size: 10px; color: #888; }
+    </style>
+</head>
+<body>
+    <h1>Anlage EÜR</h1>
+    <div class="subtitle">Einnahmenüberschussrechnung gemäß § 4 Abs. 3 EStG</div>
+
+    <table class="header-info">
+        <tr><td><strong>Name:</strong></td><td>{{ business_name }}</td></tr>
+        <tr><td><strong>Adresse:</strong></td><td>{{ business_address }}</td></tr>
+        <tr><td><strong>Steuernummer:</strong></td><td>{{ tax_id or '–' }}</td></tr>
+        <tr><td><strong>Wirtschaftsjahr:</strong></td><td>{{ year }}</td></tr>
+    </table>
+
+    <table>
+        <tr class="section-header">
+            <td colspan="2">Betriebseinnahmen</td>
+            <td class="amount">EUR</td>
+        </tr>
+        <tr>
+            <td class="line-num">1</td>
+            <td>Umsatzerlöse (Netto bei Regelbesteuerung, Brutto bei Kleinunternehmer)</td>
+            <td class="amount">{{ "%.2f"|format(euer.gross_revenue)|replace(".", ",") }}</td>
+        </tr>
+        <tr class="total-row">
+            <td colspan="2"><strong>Summe der Betriebseinnahmen</strong></td>
+            <td class="amount"><strong>{{ "%.2f"|format(euer.gross_revenue)|replace(".", ",") }}</strong></td>
+        </tr>
+    </table>
+
+    <table>
+        <tr class="section-header">
+            <td colspan="2">Betriebsausgaben</td>
+            <td class="amount">EUR</td>
+        </tr>
+        <tr>
+            <td class="line-num">35</td>
+            <td>Wareneinsatz</td>
+            <td class="amount">{{ "%.2f"|format(euer.material_costs)|replace(".", ",") }}</td>
+        </tr>
+        <tr>
+            <td class="line-num">41</td>
+            <td>AfA (Absetzung für Abnutzung)</td>
+            <td class="amount">{{ "%.2f"|format(euer.depreciation)|replace(".", ",") }}</td>
+        </tr>
+        <tr>
+            <td class="line-num">43</td>
+            <td>Fahrzeugkosten</td>
+            <td class="amount">{{ "%.2f"|format(euer.vehicle_costs)|replace(".", ",") }}</td>
+        </tr>
+        <tr>
+            <td class="line-num">45</td>
+            <td>Miete und Pachten (sonstige)</td>
+            <td class="amount">{{ "%.2f"|format(euer.rent_costs)|replace(".", ",") }}</td>
+        </tr>
+        <tr>
+            <td class="line-num">46</td>
+            <td>Werbekosten</td>
+            <td class="amount">{{ "%.2f"|format(euer.advertising_costs)|replace(".", ",") }}</td>
+        </tr>
+        <tr>
+            <td class="line-num">48</td>
+            <td>Sonstige betriebliche Aufwendungen</td>
+            <td class="amount">{{ "%.2f"|format(euer.other_business_expenses)|replace(".", ",") }}</td>
+        </tr>
+        <tr class="total-row">
+            <td colspan="2"><strong>Summe der Betriebsausgaben</strong></td>
+            <td class="amount"><strong>{{ "%.2f"|format(euer.total_expenses)|replace(".", ",") }}</strong></td>
+        </tr>
+    </table>
+
+    <div class="result-box">
+        <div class="label">Gewinn / Verlust (Zeile 86)</div>
+        <div class="value {% if euer.operating_result >= 0 %}positive{% else %}negative{% endif %}">
+            {{ "%.2f"|format(euer.operating_result)|replace(".", ",") }} €
+        </div>
+    </div>
+
+    <p class="disclaimer">
+        Gemäß § 19 UStG wird keine Umsatzsteuer ausgewiesen (Kleinunternehmerregelung).
+    </p>
+
+    <div class="signature">
+        <table class="signature-table">
+            <tr>
+                <td><div class="line">Ort, Datum</div></td>
+                <td style="text-align: right;"><div class="line">Unterschrift</div></td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="footer">
+        {{ business_name }} | {{ business_address }}<br>
+        Erstellt am {{ generated_date }}
+    </div>
+</body>
+</html>

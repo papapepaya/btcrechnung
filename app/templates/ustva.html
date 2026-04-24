@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}UStVA{% endblock %}
+{% block content %}
+
+<div class="page-header-row">
+    <h1>Umsatzsteuervoranmeldung</h1>
+    <div class="date-selectors">
+        <div class="year-selector">
+            <select id="yearSelect" onchange="navigate()">
+                {% for y in years %}
+                <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="year-selector">
+            <select id="typeSelect" onchange="updatePeriod()">
+                <option value="quarter" {% if period_type == 'quarter' %}selected{% endif %}>Quartal</option>
+                <option value="month" {% if period_type == 'month' %}selected{% endif %}>Monat</option>
+            </select>
+        </div>
+        <div class="year-selector">
+            <select id="periodSelect" onchange="navigate()">
+                {% if period_type == 'quarter' %}
+                    {% for q in [1,2,3,4] %}
+                    <option value="{{ q }}" {% if q == period %}selected{% endif %}>Q{{ q }}</option>
+                    {% endfor %}
+                {% else %}
+                    {% for m in range(1, 13) %}
+                    <option value="{{ m }}" {% if m == period %}selected{% endif %}>{{ month_names[m-1] }}</option>
+                    {% endfor %}
+                {% endif %}
+            </select>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>{{ ustva.period_label }} – {{ business_name }}</h2>
+    <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 16px;">
+        USt-IdNr.: {{ tax_id or '–' }}
+    </p>
+
+    <table>
+        <tr>
+            <th>Zeile</th>
+            <th>Bezeichnung</th>
+            <th style="text-align: right;">Betrag</th>
+        </tr>
+        <tr>
+            <td>81</td>
+            <td>Steuer 19% (aus Rechnungen mit 19% MwSt)</td>
+            <td style="text-align: right;" class="positive">{{ "%.2f"|format(ustva.ust_19)|replace(".", ",") }} €</td>
+        </tr>
+        <tr>
+            <td>86</td>
+            <td>Steuer 7% (aus Rechnungen mit 7% MwSt)</td>
+            <td style="text-align: right;" class="positive">{{ "%.2f"|format(ustva.ust_7)|replace(".", ",") }} €</td>
+        </tr>
+        <tr>
+            <td>66</td>
+            <td>Abziehbare Vorsteuer (aus Ausgaben)</td>
+            <td style="text-align: right;" class="negative">-{{ "%.2f"|format(ustva.vorsteuer)|replace(".", ",") }} €</td>
+        </tr>
+        <tr class="total-row">
+            <td colspan="2">
+                {% if ustva.is_erstattung %}
+                <strong>Erstattung</strong>
+                {% else %}
+                <strong>Zahllast</strong>
+                {% endif %}
+            </td>
+            <td style="text-align: right;">
+                <strong>{{ "%.2f"|format(ustva.ustva_betrag)|replace(".", ",") }} €</strong>
+            </td>
+        </tr>
+    </table>
+
+    <div style="margin-top: 16px; font-size: 0.82rem; color: var(--text-muted);">
+        <p>Netto 19%: {{ "%.2f"|format(ustva.net_19)|replace(".", ",") }} €</p>
+        <p>Netto 7%: {{ "%.2f"|format(ustva.net_7)|replace(".", ",") }} €</p>
+        <p>Gesamtumsatz (brutto): {{ "%.2f"|format(ustva.revenue_total)|replace(".", ",") }} €</p>
+        <p>Gesamtausgaben (brutto): {{ "%.2f"|format(ustva.expenses_total)|replace(".", ",") }} €</p>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Hinweis</h2>
+    <p style="font-size: 0.9rem; color: var(--text-secondary);">
+        Diese Übersicht dient der internen Vorbereitung der Umsatzsteuervoranmeldung.
+        Die Abgabe erfolgt über ELSTER oder durch deinen Steuerberater.
+    </p>
+    {% if period_type == 'quarter' %}
+    <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 8px;">
+        Abgabetermin für {{ ustva.period_label }}: {{ "10.04" if period == 1 else ("10.07" if period == 2 else ("10.10" if period == 3 else "10.01")) }}.{{ year + 1 if period == 4 else year }}
+    </p>
+    {% else %}
+    <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 8px;">
+        Abgabetermin für {{ ustva.period_label }}: {{ "10." }}{% if period == 12 %}01.{{ year + 1 }}{% else %}{{ "%02d"|format(period + 1) }}.{{ year }}{% endif %}
+    </p>
+    {% endif %}
+</div>
+
+<div class="actions">
+    <a href="/ustva/pdf?year={{ year }}&period={{ period }}&type={{ period_type }}" class="btn btn-primary">UStVA als PDF</a>
+    <a href="/ustva/csv?year={{ year }}&period={{ period }}&type={{ period_type }}" class="btn btn-secondary">UStVA als CSV</a>
+</div>
+
+<script>
+function navigate() {
+    var y = document.getElementById('yearSelect').value;
+    var t = document.getElementById('typeSelect').value;
+    var p = document.getElementById('periodSelect').value;
+    location.href = '/ustva?year=' + y + '&period=' + p + '&type=' + t;
+}
+
+function updatePeriod() {
+    var t = document.getElementById('typeSelect').value;
+    var sel = document.getElementById('periodSelect');
+    sel.innerHTML = '';
+
+    if (t === 'quarter') {
+        var quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
+        for (var i = 1; i <= 4; i++) {
+            var opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = quarters[i-1];
+            sel.appendChild(opt);
+        }
+    } else {
+        var months = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+        for (var i = 1; i <= 12; i++) {
+            var opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = months[i-1];
+            sel.appendChild(opt);
+        }
+    }
+    navigate();
+}
+</script>
+
+{% endblock %}

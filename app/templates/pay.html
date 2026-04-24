@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zahlung – {{ invoice.id }} – {{ studio_name }}</title>
+    <style>
+        :root {
+            --orange: #F7931A;
+            --orange-dark: #E07D10;
+            --green: #4CAF50;
+            --red: #F44336;
+            --gray-50: #FAFAFA;
+            --gray-100: #F5F5F5;
+            --gray-200: #EEEEEE;
+            --gray-300: #E0E0E0;
+            --gray-500: #9E9E9E;
+            --gray-700: #616161;
+            --gray-900: #212121;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: var(--gray-900);
+        }
+        .pay-card {
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 440px;
+            width: 100%;
+            overflow: hidden;
+        }
+        .pay-header {
+            background: var(--orange);
+            color: #fff;
+            padding: 20px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .pay-header .logo-icon { font-size: 1.6rem; font-weight: 800; }
+        .pay-header .logo-text { font-size: 1.1rem; font-weight: 600; }
+        .pay-header .right { margin-left: auto; font-size: 0.8rem; opacity: 0.85; }
+        .pay-body { padding: 24px; }
+        .invoice-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--gray-200);
+        }
+        .invoice-info .label {
+            font-size: 0.78rem;
+            color: var(--gray-500);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .invoice-info .value { font-size: 0.95rem; font-weight: 500; }
+        .amount-display { text-align: center; margin-bottom: 24px; }
+        .amount-eur { font-size: 2rem; font-weight: 700; color: var(--gray-900); }
+        .amount-btc {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: var(--orange);
+            margin-top: 4px;
+            transition: opacity 0.3s;
+        }
+        .amount-btc.updating { opacity: 0.4; }
+        .rate-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.82rem;
+            color: var(--gray-700);
+            margin-bottom: 20px;
+            padding: 10px 14px;
+            background: var(--gray-50);
+            border-radius: 8px;
+        }
+        .rate-row .rate-value {
+            font-weight: 600;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+        }
+        .rate-row .refresh-info { display: flex; align-items: center; gap: 6px; }
+        .rate-row .live-dot {
+            width: 6px; height: 6px;
+            background: var(--green);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .qr-section { text-align: center; margin-bottom: 20px; }
+        .qr-section .qr-box {
+            display: inline-block;
+            padding: 12px;
+            background: #fff;
+            border: 2px solid var(--gray-200);
+            border-radius: 12px;
+        }
+        .qr-section .qr-box img { display: block; }
+        .qr-section .qr-hint {
+            font-size: 0.75rem;
+            color: var(--gray-500);
+            margin-top: 8px;
+        }
+        .address-box {
+            background: var(--gray-100);
+            border: 1px solid var(--gray-300);
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 0.72rem;
+            word-break: break-all;
+            color: var(--gray-700);
+            margin-bottom: 12px;
+            position: relative;
+        }
+        .copy-btn {
+            position: absolute;
+            top: 6px; right: 6px;
+            background: var(--orange);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 0.72rem;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+        .copy-btn:hover { background: var(--orange-dark); }
+        .copy-btn.copied { background: var(--green); }
+        .paid-badge {
+            text-align: center;
+            padding: 24px;
+            background: #E8F5E9;
+            border-radius: 12px;
+            margin-bottom: 16px;
+        }
+        .paid-badge .icon { font-size: 2.5rem; margin-bottom: 8px; }
+        .paid-badge .text { font-size: 1.2rem; font-weight: 600; color: var(--green); }
+        .paid-badge .date { font-size: 0.85rem; color: var(--gray-700); margin-top: 4px; }
+        .footer {
+            text-align: center;
+            padding: 16px 24px;
+            background: var(--gray-50);
+            border-top: 1px solid var(--gray-200);
+            font-size: 0.72rem;
+            color: var(--gray-500);
+        }
+        .no-btc {
+            text-align: center;
+            padding: 30px 20px;
+            color: var(--gray-500);
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="pay-card">
+        <div class="pay-header">
+            <span class="logo-icon">&#8383;</span>
+            <span class="logo-text">BTCRechnung</span>
+            <span class="right">Zahlung</span>
+        </div>
+
+        <div class="pay-body">
+            {% if invoice.payment_received %}
+            <!-- BEZAHLT -->
+            <div class="invoice-info">
+                <div><div class="label">Rechnung</div><div class="value">{{ invoice.id }}</div></div>
+                <div style="text-align:right"><div class="label">Kunde</div><div class="value">{{ invoice.customer_name }}</div></div>
+            </div>
+            <div class="paid-badge">
+                <div class="icon">&#10003;</div>
+                <div class="text">Bezahlt</div>
+                <div class="date">{{ invoice.payment_date or '' }}</div>
+                {% if invoice.btc_amount_received %}
+                <div style="margin-top: 12px; font-size: 0.85rem; color: var(--gray-700);">
+                    Erhalten: <strong>{{ "%.8f"|format(invoice.btc_amount_received) }}&nbsp;BTC</strong>
+                    {% if invoice.eur_value_at_payment %}
+                    = <strong>{{ "%.2f"|format(invoice.eur_value_at_payment) }}&nbsp;&euro;</strong>
+                    {% endif %}
+                </div>
+                {% endif %}
+                {% if invoice.payment_txid %}
+                <div style="margin-top: 6px; font-size: 0.7rem;">
+                    <a href="https://mempool.space/tx/{{ invoice.payment_txid }}" target="_blank"
+                       style="color: var(--orange); text-decoration: none;">
+                        Transaktion ansehen &#8599;
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+            <div class="amount-display">
+                <div class="amount-eur">{{ "%.2f"|format(invoice.amount) }}&nbsp;&euro;</div>
+            </div>
+
+            {% elif not invoice.btc_address %}
+            <!-- KEINE BTC-ADRESSE -->
+            <div class="invoice-info">
+                <div><div class="label">Rechnung</div><div class="value">{{ invoice.id }}</div></div>
+                <div style="text-align:right"><div class="label">Kunde</div><div class="value">{{ invoice.customer_name }}</div></div>
+            </div>
+            <div class="no-btc">
+                F&uuml;r diese Rechnung ist keine Bitcoin-Zahlung hinterlegt.<br><br>
+                Bitte nutzen Sie die Bankverbindung auf der Rechnung.
+            </div>
+
+            {% else %}
+            <!-- ZAHLUNGSM&Ouml;GLICHKEIT -->
+            <div class="invoice-info">
+                <div><div class="label">Rechnung</div><div class="value">{{ invoice.id }}</div></div>
+                <div style="text-align:right"><div class="label">Kunde</div><div class="value">{{ invoice.customer_name }}</div></div>
+            </div>
+
+            <div class="amount-display">
+                <div class="amount-eur">{{ "%.2f"|format(invoice.amount) }}&nbsp;&euro;</div>
+                <div class="amount-btc" id="btc-amount" data-eur="{{ invoice.amount }}">
+                    {{ "%.8f"|format(btc_amount) }} BTC
+                </div>
+            </div>
+
+            <div class="rate-row">
+                <span>1 BTC = <span class="rate-value" id="rate-value">{{ "{:,.2f}".format(btc_rate) }}&nbsp;&euro;</span></span>
+                <span class="refresh-info"><span class="live-dot"></span> Live</span>
+            </div>
+
+            {% if btc_discount_percent and btc_discount_percent != 0 %}
+            <div class="rate-row" style="color: var(--orange); font-size: 0.85rem; margin-top: 6px;">
+                {% if btc_discount_percent < 0 %}
+                <span>&#10003; {{ "%.2f"|format(btc_discount_percent * -1) }}% Bitcoin-Rabatt</span>
+                {% else %}
+                <span>&#9888; +{{ "%.2f"|format(btc_discount_percent) }}% Bitcoin-Aufschlag</span>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <div class="qr-section">
+                <div class="qr-box" id="qr-code">
+                    <img src="{{ qr_btc }}" alt="Bitcoin QR" width="200" height="200">
+                </div>
+                <div class="qr-hint">QR-Code mit Wallet scannen</div>
+            </div>
+
+            <div class="address-box">
+                <button class="copy-btn" id="copy-btn">Kopieren</button>
+                {{ invoice.btc_address }}
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="footer">
+            {{ studio_name }} &middot; Powered by BTCRechnung
+        </div>
+    </div>
+
+    {% if not invoice.payment_received and invoice.btc_address %}
+    <script>
+    (function() {
+        var INVOICE_ID = "{{ invoice.id }}";
+        var API_URL = "/api/pay/" + INVOICE_ID;
+        var btcAddress = "{{ invoice.btc_address }}";
+
+        function formatBTC(n) {
+            return n.toFixed(8).replace(/\.?0+$/, '') + ' BTC';
+        }
+        function formatRate(n) {
+            return n.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' \u20AC';
+        }
+
+        function refresh() {
+            fetch(API_URL)
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.payment_received) {
+                        location.reload();
+                        return;
+                    }
+                    var el = document.getElementById('btc-amount');
+                    if (el) {
+                        el.classList.add('updating');
+                        setTimeout(function() {
+                            el.textContent = formatBTC(data.btc_amount);
+                            el.classList.remove('updating');
+                        }, 300);
+                    }
+                    var re = document.getElementById('rate-value');
+                    if (re) re.innerHTML = formatRate(data.btc_rate);
+
+                    // QR-Code aktualisieren falls qrcode.js geladen
+                    if (typeof QRCode !== 'undefined' && data.btc_address) {
+                        var container = document.getElementById('qr-code');
+                        container.innerHTML = '';
+                        new QRCode(container, {
+                            text: 'bitcoin:' + data.btc_address + '?amount=' + data.btc_amount.toFixed(8),
+                            width: 200, height: 200,
+                            colorDark: '#212121', colorLight: '#ffffff',
+                            correctLevel: QRCode.CorrectLevel.M
+                        });
+                    }
+                })
+                .catch(function(e) { console.warn('Refresh Fehler:', e); });
+        }
+
+        // Kopieren-Button
+        var btn = document.getElementById('copy-btn');
+        if (btn) {
+            btn.addEventListener('click', function() {
+                navigator.clipboard.writeText(btcAddress).then(function() {
+                    btn.textContent = 'Kopiert!';
+                    btn.classList.add('copied');
+                    setTimeout(function() {
+                        btn.textContent = 'Kopieren';
+                        btn.classList.remove('copied');
+                    }, 2000);
+                });
+            });
+        }
+
+        // Auto-Refresh alle 60s
+        setInterval(refresh, 60000);
+    })();
+    </script>
+    {% endif %}
+</body>
+</html>

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login – BTCRechnung</title>
+    <style>
+        :root {
+            --orange: #F7931A;
+            --orange-dark: #E07D10;
+            --gray-100: #F5F5F5;
+            --gray-200: #EEEEEE;
+            --gray-500: #9E9E9E;
+            --gray-700: #616161;
+            --gray-900: #212121;
+            --red: #F44336;
+            --red-bg: #FFEBEE;
+            --radius-md: 10px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .login-card {
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 400px;
+            width: 100%;
+            padding: 40px 32px;
+            text-align: center;
+        }
+        .logo { font-size: 2.2rem; font-weight: 800; color: var(--orange); margin-bottom: 6px; }
+        .subtitle { color: var(--gray-500); font-size: 0.85rem; margin-bottom: 28px; }
+        .field { margin-bottom: 16px; text-align: left; }
+        .field label { display: block; font-size: 0.82rem; font-weight: 500; color: var(--gray-700); margin-bottom: 4px; }
+        .field input {
+            width: 100%; padding: 10px 14px; border: 1px solid var(--gray-200);
+            border-radius: var(--radius-md); font-size: 0.95rem; transition: border-color 0.2s;
+        }
+        .field input:focus { outline: none; border-color: var(--orange); box-shadow: 0 0 0 3px rgba(247,147,26,0.15); }
+        .btn {
+            width: 100%; padding: 12px; background: var(--orange); color: #fff;
+            border: none; border-radius: var(--radius-md); font-size: 1rem;
+            font-weight: 600; cursor: pointer; transition: background 0.2s; margin-top: 8px;
+        }
+        .btn:hover { background: var(--orange-dark); }
+        .error {
+            background: var(--red-bg); color: var(--red); padding: 10px 14px;
+            border-radius: var(--radius-md); font-size: 0.85rem; margin-bottom: 16px; text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="logo">&#8383; BTCRechnung</div>
+        <div class="subtitle">Anmeldung erforderlich</div>
+        {% if error %}<div class="error">{{ error }}</div>{% endif %}
+        <form method="POST" action="/login">
+            <div class="field">
+                <label>Passwort</label>
+                <input type="password" name="password" autofocus required placeholder="Passwort eingeben">
+            </div>
+            <button type="submit" class="btn">Anmelden</button>
+        </form>
+    </div>
+</body>
+</html>

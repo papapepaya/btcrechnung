@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}EÜR {{ year }}{% endblock %}
+{% block content %}
+<style>
+    .euer-header {
+        text-align: center;
+        color: var(--gray-600);
+        font-size: 0.88rem;
+        margin-bottom: 20px;
+    }
+    .euer-header strong {
+        color: var(--text);
+    }
+    .euer-header .badge {
+        margin-top: 8px;
+        background: var(--orange-light);
+        color: var(--orange);
+    }
+    .profit-highlight {
+        font-size: 1.5rem;
+    }
+</style>
+
+<div class="page-header-row">
+    <h1>Einnahmenüberschussrechnung (EÜR)</h1>
+    <div class="year-selector">
+        <select onchange="location.href='/euer?year='+this.value">
+            {% for y in years %}
+            <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+        </select>
+    </div>
+</div>
+
+<div class="card euer-header">
+    <strong>{{ business_name }}</strong><br>
+    {{ business_address }}<br>
+    Steuernummer: {{ tax_id or '–' }}
+    <br>
+    {% if business_type == 'kleinunternehmer' %}
+    <span class="badge">Kleinunternehmer gemäß § 19 UStG</span>
+    {% else %}
+    <span class="badge" style="background: #E3F2FD; color: #1565C0;">Reguläres Unternehmen (MwSt-pflichtig)</span>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Betriebseinnahmen</h2>
+    <table>
+        <tr>
+            <th style="width: 60px;">Zeile</th>
+            <th>Bezeichnung</th>
+            <th style="text-align: right;">Betrag</th>
+        </tr>
+        <tr>
+            <td>1</td>
+            <td>Umsatzerlöse</td>
+            <td style="text-align: right;" class="positive">{{ "%.2f"|format(euer.gross_revenue)|replace(".", ",") }} €</td>
+        </tr>
+        <tr class="total-row">
+            <td></td>
+            <td>Summe Betriebseinnahmen</td>
+            <td style="text-align: right;">{{ "%.2f"|format(euer.gross_revenue)|replace(".", ",") }} €</td>
+        </tr>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Betriebsausgaben</h2>
+    <table>
+        <tr>
+            <th style="width: 60px;">Zeile</th>
+            <th>Bezeichnung</th>
+            <th style="text-align: right;">Betrag</th>
+        </tr>
+        <tr>
+            <td>35</td>
+            <td>Wareneinsatz</td>
+            <td style="text-align: right;">{{ "%.2f"|format(euer.material_costs)|replace(".", ",") }} €</td>
+        </tr>
+        <tr>
+            <td>41</td>
+            <td>AfA (Abschreibungen)</td>
+            <td style="text-align: right;">{{ "%.2f"|format(euer.depreciation)|replace(".", ",") }} €</td>
+        </tr>
+        <tr>
+            <td>43</td>
+            <td>Fahrzeugkosten</td>
+            <td style="text-align: right;">{{ "%.2f"|format(euer.vehicle_costs)|replace(".", ",") }} €</td>
+        </tr>
+        <tr>
+            <td>45</td>
+            <td>Miete / Raumkosten</td>
+            <td style="text-align: right;">{{ "%.2f"|format(euer.rent_costs)|replace(".", ",") }} €</td>
+        </tr>
+        <tr>
+            <td>46</td>
+            <td>Werbekosten</td>
+            <td style="text-align: right;">{{ "%.2f"|format(euer.advertising_costs)|replace(".", ",") }} €</td>
+        </tr>
+        <tr>
+            <td>48</td>
+            <td>Sonstige betriebl. Aufwendungen</td>
+            <td style="text-align: right;">{{ "%.2f"|format(euer.other_business_expenses)|replace(".", ",") }} €</td>
+        </tr>
+        <tr class="total-row">
+            <td></td>
+            <td>Summe Betriebsausgaben</td>
+            <td style="text-align: right;">{{ "%.2f"|format(euer.total_expenses)|replace(".", ",") }} €</td>
+        </tr>
+    </table>
+</div>
+
+<div class="card" style="text-align: center;">
+    <h2>Gewinnermittlung</h2>
+    <table>
+        <tr>
+            <td style="font-size: 1rem;">Betriebseinnahmen</td>
+            <td style="text-align: right; font-size: 1rem;" class="positive">{{ "%.2f"|format(euer.gross_revenue)|replace(".", ",") }} €</td>
+        </tr>
+        <tr>
+            <td style="font-size: 1rem;">− Betriebsausgaben</td>
+            <td style="text-align: right; font-size: 1rem;" class="negative">{{ "%.2f"|format(euer.total_expenses)|replace(".", ",") }} €</td>
+        </tr>
+        <tr class="total-row">
+            <td style="font-size: 1.2rem;"><strong>Gewinn / Verlust (Zeile 86)</strong></td>
+            <td style="text-align: right;" class="{% if euer.operating_result >= 0 %}positive{% else %}negative{% endif %} profit-highlight">
+                <strong>{{ "%.2f"|format(euer.operating_result)|replace(".", ",") }} €</strong>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="actions">
+    <a href="/euer/pdf?year={{ year }}" class="btn btn-primary">EÜR als PDF</a>
+    <a href="/euer/csv?year={{ year }}" class="btn btn-secondary">EÜR als CSV</a>
+    {% if is_pro %}
+    <a href="/datev/export?year={{ year }}" class="btn btn-secondary">DATEV Export</a>
+    {% endif %}
+</div>
+{% endblock %}

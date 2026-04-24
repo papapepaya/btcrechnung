@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Übersicht{% endblock %}
+{% block content %}
+
+<div class="page-header-row">
+    <h1>Dashboard</h1>
+    <div class="date-selectors">
+        <div class="year-selector">
+            <select id="month-select" onchange="navigate()">
+                {% for m in range(1, 13) %}
+                <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ month_names[m-1] }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="year-selector">
+            <select id="year-select" onchange="navigate()">
+                {% for y in years %}
+                <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+</div>
+
+<script>
+function navigate() {
+    var y = document.getElementById('year-select').value;
+    var m = document.getElementById('month-select').value;
+    location.href = '/dashboard?year=' + y + '&month=' + m;
+}
+</script>
+
+<div class="stats-grid">
+    <div class="card stat-card">
+        <h3>Einnahmen ({{ month_name }})</h3>
+        <div class="amount positive">{{ "%.2f"|format(summary.total_income) }} €</div>
+        <div class="stat-sub">{{ summary.income_count }} Rechnung{{ "en" if summary.income_count != 1 }}</div>
+    </div>
+    <div class="card stat-card">
+        <h3>Ausgaben ({{ month_name }})</h3>
+        <div class="amount negative">{{ "%.2f"|format(summary.total_expenses) }} €</div>
+        <div class="stat-sub">{{ summary.expense_count }} Ausgabe{{ "n" if summary.expense_count != 1 }}</div>
+    </div>
+    <div class="card stat-card">
+        <h3>Gewinn ({{ month_name }})</h3>
+        <div class="amount {% if summary.profit >= 0 %}positive{% else %}negative{% endif %}">{{ "%.2f"|format(summary.profit) }} €</div>
+        <div class="stat-sub">Monatsgewinn</div>
+    </div>
+    <div class="card stat-card">
+        <h3>Jahresgewinn</h3>
+        <div class="amount {% if yearly.profit >= 0 %}positive{% else %}negative{% endif %}">{{ "%.2f"|format(yearly.profit) }} €</div>
+        <div class="stat-sub">{{ year }} gesamt</div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Monatsübersicht {{ year }}</h2>
+    <table>
+        <tr>
+            <th>Monat</th>
+            <th style="text-align: right;">Einnahmen</th>
+            <th style="text-align: right;">Ausgaben</th>
+            <th style="text-align: right;">Gewinn</th>
+        </tr>
+        {% for m in yearly.monthly_breakdown %}
+        {% if m.total_income > 0 or m.total_expenses > 0 %}
+        <tr>
+            <td>{{ month_names[m.month-1] }}</td>
+            <td style="text-align: right;">{{ "%.2f"|format(m.total_income) }} €</td>
+            <td style="text-align: right;">{{ "%.2f"|format(m.total_expenses) }} €</td>
+            <td style="text-align: right;" class="{% if m.profit >= 0 %}positive{% else %}negative{% endif %}">{{ "%.2f"|format(m.profit) }} €</td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+        <tr class="total-row">
+            <td>Gesamt</td>
+            <td style="text-align: right;">{{ "%.2f"|format(yearly.total_income) }} €</td>
+            <td style="text-align: right;">{{ "%.2f"|format(yearly.total_expenses) }} €</td>
+            <td style="text-align: right;" class="{% if yearly.profit >= 0 %}positive{% else %}negative{% endif %}">{{ "%.2f"|format(yearly.profit) }} €</td>
+        </tr>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Letzte Aktivitäten</h2>
+    {% if transactions %}
+    <table>
+        <tr>
+            <th>Datum</th>
+            <th>Typ</th>
+            <th>Beschreibung</th>
+            <th style="text-align: right;">Betrag</th>
+        </tr>
+        {% for t in transactions %}
+        <tr>
+            <td>{{ t.date }}</td>
+            <td>{{ t.type }}</td>
+            <td>{{ t.description }}</td>
+            <td style="text-align: right;" class="{% if t.amount >= 0 %}positive{% else %}negative{% endif %}">{{ "%.2f"|format(t.amount) }} €</td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% else %}
+    <div class="no-data">Noch keine Aktivitäten.</div>
+    {% endif %}
+</div>
+{% endblock %}

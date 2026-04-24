@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Einnahme hinzufügen{% endblock %}
+{% block content %}
+
+<div class="page-header-row">
+    <h1>Einnahme manuell hinzufügen</h1>
+</div>
+
+<div class="card">
+    <p style="color: var(--text-secondary); margin-bottom: 20px;">
+        Erfasst eine Einnahme ohne PDF-Rechnung. Nützlich für nachträgliche Einträge oder bereits existierende Rechnungen.
+    </p>
+
+    <form method="POST" action="/income/add">
+        <div class="form-row">
+            <div class="field">
+                <label>Datum</label>
+                <input type="date" name="date" value="{{ today }}" required>
+            </div>
+            <div class="field">
+                <label>Betrag (€)</label>
+                <input type="number" name="amount" step="0.01" min="0.01" placeholder="0,00" required>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="field">
+                <label>Kunde / Firma</label>
+                <input type="text" name="customer_name" required placeholder="Max Mustermann">
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="field">
+                <label>Leistung / Beschreibung</label>
+                <input type="text" name="items_description" required placeholder="Beratung, Design, Fotografie...">
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="field">
+                <label>Status</label>
+                <select name="payment_received">
+                    <option value="false">Offen</option>
+                    <option value="true">Bezahlt</option>
+                </select>
+            </div>
+            <div class="field" id="payment-date-field" style="display: none;">
+                <label>Zahlungsdatum</label>
+                <input type="date" name="payment_date" value="{{ today }}">
+            </div>
+            <div class="field" id="payment-method-field" style="display: none;">
+                <label>Zahlungsart</label>
+                <select name="payment_method">
+                    {% for key, label in payment_methods.items() %}
+                    <option value="{{ key }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button type="submit" class="btn btn-primary">Speichern</button>
+            <a href="/income" class="btn btn-secondary">Abbrechen</a>
+        </div>
+    </form>
+</div>
+
+<script>
+const paymentSelect = document.querySelector('select[name="payment_received"]');
+const paymentDateField = document.getElementById('payment-date-field');
+const paymentMethodField = document.getElementById('payment-method-field');
+
+function togglePaymentFields() {
+    if (paymentSelect.value === 'true') {
+        paymentDateField.style.display = 'block';
+        paymentMethodField.style.display = 'block';
+    } else {
+        paymentDateField.style.display = 'none';
+        paymentMethodField.style.display = 'none';
+    }
+}
+
+paymentSelect.addEventListener('change', togglePaymentFields);
+</script>
+
+{% endblock %}

@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+{% block title %}Rechnung erstellen{% endblock %}
+{% block content %}
+<style>
+    h1 span { color: var(--gray-400); font-weight: 400; font-size: 0.9rem; }
+    .item-row { display: flex; gap: 10px; align-items: end; margin-bottom: 10px; }
+    .item-row .field:nth-child(1) { flex: 3; }
+    .item-row .field:nth-child(2) { flex: 1; }
+    .item-row .field:nth-child(3) { flex: 1; }
+    .item-row .field:nth-child(4) { flex: 0 0 auto; }
+    .btn-remove {
+        background: var(--gray-100);
+        border: 1px solid var(--gray-300);
+        color: var(--red);
+        cursor: pointer;
+        font-size: 1.1rem;
+        padding: 6px 12px;
+        line-height: 1;
+        border-radius: var(--radius-sm);
+        transition: var(--transition);
+    }
+    .btn-remove:hover { background: var(--red-bg); border-color: var(--red); }
+    .form-actions { display: flex; gap: 12px; justify-content: space-between; align-items: center; margin-top: 10px; }
+    .loading { display: none; text-align: center; padding: 20px; color: var(--gray-600); }
+    .loading.active { display: block; }
+    .spinner {
+        display: inline-block;
+        width: 22px;
+        height: 22px;
+        border: 3px solid var(--gray-200);
+        border-top-color: var(--orange);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        vertical-align: middle;
+        margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error {
+        background: var(--red-bg);
+        color: var(--red);
+        padding: 14px 18px;
+        border-radius: var(--radius-sm);
+        margin-top: 14px;
+        display: none;
+        font-size: 0.9rem;
+        border: 1px solid rgba(244, 67, 54, 0.2);
+    }
+    .error.active { display: block; }
+    .btc-toggle {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 16px 20px;
+        background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%);
+        border-radius: var(--radius-md);
+        border: 2px solid var(--orange);
+        margin-bottom: 14px;
+        cursor: pointer;
+        transition: var(--transition);
+    }
+    .btc-toggle:hover {
+        box-shadow: 0 2px 12px rgba(247, 147, 26, 0.2);
+    }
+    .btc-toggle.checked {
+        background: linear-gradient(135deg, #FFF3E0 0%, #FFB74D 100%);
+        border-color: var(--orange-dark);
+    }
+    .btc-toggle input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        accent-color: var(--orange);
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .btc-toggle .btc-icon {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: var(--orange);
+        flex-shrink: 0;
+    }
+    .btc-toggle .btc-text {
+        flex: 1;
+    }
+    .btc-toggle .btc-text strong {
+        display: block;
+        font-size: 1rem;
+        color: #000;
+    }
+    .btc-toggle .btc-text span {
+        font-size: 0.78rem;
+        color: #333;
+    }
+    .settings-hint {
+        font-size: 0.78rem;
+        color: var(--gray-500);
+        margin-top: 4px;
+    }
+</style>
+
+<div class="page-header-row">
+    <h1>Rechnung erstellen</h1>
+    <button type="submit" form="invoiceForm" class="btn btn-primary" id="submitBtn">PDF erstellen</button>
+</div>
+<div class="error" id="errorMsg"></div>
+<div class="loading" id="loading"><span class="spinner"></span>PDF wird generiert...</div>
+
+<form id="invoiceForm">
+    <!-- Kunde -->
+    <div class="card">
+        <h2>Kunde</h2>
+        <div class="form-row">
+            <div class="field">
+                <label>Name / Firma</label>
+                <input type="text" id="customer_name" required placeholder="Max Mustermann">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="field">
+                <label>Adresse</label>
+                <textarea id="customer_address" required placeholder="Musterstraße 1, 12345 Musterstadt"></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- Positionen -->
+    <div class="card">
+        <h2>Positionen</h2>
+        <div id="itemsContainer">
+            <div class="item-row">
+                <div class="field">
+                    <label>Beschreibung</label>
+                    <input type="text" name="item_desc" required placeholder="Fotoshooting">
+                </div>
+                <div class="field">
+                    <label>Menge</label>
+                    <input type="number" name="item_qty" value="1" min="0.01" step="0.01" required>
+                </div>
+                <div class="field">
+                    <label>Einzelpreis (€ netto)</label>
+                    <input type="text" name="item_price" value="0" required placeholder="0,00" inputmode="decimal">
+                </div>
+                {% if business_type == 'regulaer' and is_pro %}
+                <div class="field" style="max-width: 80px;">
+                    <label>MwSt</label>
+                    <select name="item_vat">
+                        <option value="0.19" selected>19%</option>
+                        <option value="0.07">7%</option>
+                        <option value="0.0">0%</option>
+                    </select>
+                </div>
+                {% endif %}
+                <div class="field">
+                    <button type="button" class="btn-remove" onclick="removeItem(this)" title="Entfernen">×</button>
+                </div>
+            </div>
+        </div>
+        <div class="form-actions">
+            <button type="button" class="btn btn-secondary" onclick="addItem()">+ Position hinzufügen</button>
+        </div>
+    </div>
+
+    <!-- Bitcoin -->
+    <div class="card">
+        <h2>Zahlung</h2>
+        <label class="btc-toggle" id="btcToggle">
+            <input type="checkbox" id="btc_enabled">
+            <span class="btc-icon">&#8383;</span>
+            <span class="btc-text">
+                <strong>Bitcoin-Zahlung aktivieren</strong>
+                <span>Kunde erhält QR-Code für direkte BTC-Zahlung</span>
+            </span>
+        </label>
+        <p class="settings-hint">
+            IBAN/BIC aus <a href="/settings" style="color: var(--orange);">Einstellungen</a>.
+            BTC-Adressen automatisch via zpub.
+        </p>
+        {% if not has_iban and not has_btc %}
+        <div style="background: var(--orange-light); border: 1px solid var(--orange); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 0.82rem; color: var(--orange-dark); margin-top: 10px;">
+            &#9888; Keine Zahlungsmethode hinterlegt. Bitte <a href="/settings" style="color: var(--orange); font-weight: 600;">Einstellungen</a> → Bankverbindung oder Bitcoin einrichten.
+        </div>
+        {% endif %}
+    </div>
+</form>
+
+<script>
+    var hasVat = document.querySelector('[name="item_vat"]') !== null;
+
+    function addItem() {
+        const container = document.getElementById('itemsContainer');
+        const row = document.createElement('div');
+        row.className = 'item-row';
+        var html = `
+            <div class="field"><input type="text" name="item_desc" required placeholder="Beschreibung"></div>
+            <div class="field"><input type="number" name="item_qty" value="1" min="0.01" step="0.01" required></div>
+            <div class="field"><input type="text" name="item_price" value="0" required placeholder="0,00" inputmode="decimal"></div>`;
+        if (hasVat) {
+            html += `<div class="field" style="max-width: 80px;"><select name="item_vat"><option value="0.19" selected>19%</option><option value="0.07">7%</option><option value="0.0">0%</option></select></div>`;
+        }
+        html += `<div class="field"><button type="button" class="btn-remove" onclick="removeItem(this)">×</button></div>`;
+        row.innerHTML = html;
+        container.appendChild(row);
+    }
+
+    function removeItem(btn) {
+        const container = document.getElementById('itemsContainer');
+        if (container.children.length > 1) {
+            btn.closest('.item-row').remove();
+        }
+    }
+
+    document.getElementById('btc_enabled').addEventListener('change', function() {
+        document.getElementById('btcToggle').classList.toggle('checked', this.checked);
+    });
+
+    document.getElementById('invoiceForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('submitBtn');
+        const loading = document.getElementById('loading');
+        const error = document.getElementById('errorMsg');
+        const btcEnabled = document.getElementById('btc_enabled').checked;
+
+        // IBAN prüfen wenn Bitcoin nicht aktiviert
+        if (!btcEnabled && !{{ 'true' if has_iban else 'false' }}) {
+            error.textContent = 'Keine IBAN in den Einstellungen hinterlegt. Bitte Einstellungen → Bankverbindung ausfüllen.';
+            error.classList.add('active');
+            return;
+        }
+
+        btn.disabled = true;
+        loading.classList.add('active');
+        error.classList.remove('active');
+
+        try {
+            const descs = document.querySelectorAll('[name="item_desc"]');
+            const qtys = document.querySelectorAll('[name="item_qty"]');
+            const prices = document.querySelectorAll('[name="item_price"]');
+            const vats = document.querySelectorAll('[name="item_vat"]');
+            const items = Array.from(descs).map((d, i) => ({
+                description: d.value,
+                quantity: parseFloat(qtys[i].value),
+                unit_price: parseFloat(prices[i].value.replace(",", ".")),
+                vat_rate: vats[i] ? parseFloat(vats[i].value) : 0.0
+            }));
+
+            const payload = {
+                customer_name: document.getElementById('customer_name').value,
+                customer_address: document.getElementById('customer_address').value,
+                items: items,
+                enable_btc: document.getElementById('btc_enabled').checked,
+            };
+
+            const resp = await fetch('/generate-pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!resp.ok) {
+                const err = await resp.json();
+                throw new Error(err.detail || 'Unbekannter Fehler');
+            }
+
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = resp.headers.get('content-disposition')?.match(/filename=(.+)/)?.[1] || 'Rechnung.pdf';
+            a.click();
+            URL.revokeObjectURL(url);
+
+        } catch (err) {
+            error.textContent = 'Fehler: ' + err.message;
+            error.classList.add('active');
+        } finally {
+            btn.disabled = false;
+            loading.classList.remove('active');
+        }
+    });
+</script>
+{% endblock %}

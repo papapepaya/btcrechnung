@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Zahlung erfassen{% endblock %}
+{% block content %}
+
+<div class="page-header-row">
+    <h1>{% if invoice.payment_received %}Zahlung bearbeiten{% else %}Zahlung erfassen{% endif %}</h1>
+</div>
+
+<div class="card">
+    <h2>{{ invoice.id }} – {{ invoice.customer_name }}</h2>
+    <div style="display: flex; gap: 30px; margin-bottom: 20px; color: var(--text-secondary); font-size: 0.9rem;">
+        <div>Rechnungsdatum: {{ invoice.date[8:10] }}.{{ invoice.date[5:7] }}.{{ invoice.date[0:4] }}</div>
+        <div>Betrag: <strong>{{ "%.2f"|format(invoice.amount) }} €</strong></div>
+    </div>
+
+    <form method="POST" action="/income/{{ invoice.id }}/paid">
+        <div class="form-row">
+            <div class="field">
+                <label>Zahlungsdatum</label>
+                <input type="date" name="payment_date" value="{{ invoice.payment_date or today }}" required>
+            </div>
+            <div class="field">
+                <label>Zahlungsart</label>
+                <select name="payment_method" id="payment_method" onchange="toggleBtcFields()" required>
+                    {% for key, label in payment_methods.items() %}
+                    <option value="{{ key }}" {% if invoice.get('payment_method') == key %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div id="btc-fields" style="{% if invoice.get('payment_method') != 'bitcoin' %}display: none;{% endif %}">
+            <div class="form-row">
+                <div class="field">
+                    <label>Erhaltene BTC-Menge</label>
+                    <input type="text" name="btc_received" value="{{ invoice.get('btc_amount_received') or '' }}" placeholder="0,00123456" inputmode="decimal">
+                    <p class="hint">Tatsächlich erhaltener BTC-Betrag für die Buchhaltung.</p>
+                </div>
+                <div class="field">
+                    <label>Transaktions-ID</label>
+                    <input type="text" name="txid" value="{{ invoice.get('payment_txid') or '' }}" placeholder="abc123...">
+                    <p class="hint">Bitcoin-Transaktions-ID zur Nachverfolgung.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button type="submit" class="btn btn-primary">
+                {% if invoice.payment_received %}Änderungen speichern{% else %}Als bezahlt markieren{% endif %}
+            </button>
+            <a href="/income" class="btn btn-secondary">Abbrechen</a>
+        </div>
+    </form>
+</div>
+
+<script>
+function toggleBtcFields() {
+    var method = document.getElementById('payment_method').value;
+    document.getElementById('btc-fields').style.display = method === 'bitcoin' ? 'block' : 'none';
+}
+</script>
+
+{% endblock %}

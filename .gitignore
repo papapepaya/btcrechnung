@@ -1,0 +1,91 @@
+# Python stuff
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# PyInstaller
+build/
+dist/
+*.spec.bak
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# Configuration & Secrets
+.env
+*.db
+cert.pem
+key.pem
+
+# Node
+node_modules/
+
+# User Data (contains invoices, expenses, counter)
+data/invoices.json
+data/expenses.json
+data/invoice_counter.json
+data/settings.json
+data/logo.png
+data/audit.json
+
+# Logs
+*.log
+
+# Generated PDFs
+*.pdf
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Personal assets
+yumi-fotografie.png
+yumi-fotografie.ico
+Yumi*.url
+*.ico
+dog-logo.png
+diagnose.txt
+Screenshot*.png
+btcrechnung-landing.zip
+
+# Private files
+
+# Website (extern gehostet auf Netlify)
+webseite/
+
+# Old mockup
+Bitcoin_Konzept.md
+BUSINESS_PLAN.md
+scripts/generate_license.py
+scripts/license_generator.py
+scripts/start_license_generator.sh
+scripts/start_license_generator.sh
+release-files/BENUTZERHANDBUCH.md
+docs/README-ALT.md
+
+# Local Netlify folder
+.netlify

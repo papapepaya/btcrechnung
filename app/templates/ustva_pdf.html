@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page {
+            size: A4;
+            margin: 40px;
+        }
+        body { font-family: 'Helvetica', sans-serif; color: #333; line-height: 1.4; font-size: 13px; }
+        .header { border-bottom: 2px solid #000; padding-bottom: 15px; margin-bottom: 30px; }
+        .header h1 { font-size: 18px; margin-bottom: 5px; }
+        .header p { font-size: 11px; color: #555; }
+        .section { margin-bottom: 25px; }
+        .section h2 { font-size: 14px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 8px 10px; background: #f8f8f8; border-bottom: 2px solid #000; font-size: 11px; text-transform: uppercase; color: #555; }
+        td { padding: 8px 10px; border-bottom: 1px solid #eee; }
+        .amount { text-align: right; font-family: 'Courier New', monospace; }
+        .total-row td { border-top: 2px solid #000; font-weight: bold; }
+        .footer { margin-top: 40px; font-size: 10px; color: #aaa; text-align: center; border-top: 1px solid #eee; padding-top: 10px; }
+        .signature { margin-top: 50px; display: flex; justify-content: space-between; }
+        .signature div { width: 45%; }
+        .signature .line { border-top: 1px solid #333; margin-top: 40px; padding-top: 5px; font-size: 10px; color: #888; }
+        .notice { margin-top: 30px; padding: 15px; background: #f8f8f8; border-radius: 5px; font-size: 11px; color: #555; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Umsatzsteuervoranmeldung</h1>
+        <p>{{ ustva.period_label }} – {{ business_name }}</p>
+        <p>USt-IdNr.: {{ tax_id or '–' }}</p>
+        <p>Datum: {{ today }}</p>
+    </div>
+
+    <div class="section">
+        <h2>Umsatzsteuer auf Leistungen</h2>
+        <table>
+            <tr>
+                <th>Zeile</th>
+                <th>Bezeichnung</th>
+                <th>Netto</th>
+                <th class="amount">Steuer</th>
+            </tr>
+            <tr>
+                <td>81</td>
+                <td>Steuer 19% (Leistungen mit 19% MwSt)</td>
+                <td class="amount">{{ "%.2f"|format(ustva.net_19)|replace(".", ",") }} €</td>
+                <td class="amount">{{ "%.2f"|format(ustva.ust_19)|replace(".", ",") }} €</td>
+            </tr>
+            <tr>
+                <td>86</td>
+                <td>Steuer 7% (Leistungen mit 7% MwSt)</td>
+                <td class="amount">{{ "%.2f"|format(ustva.net_7)|replace(".", ",") }} €</td>
+                <td class="amount">{{ "%.2f"|format(ustva.ust_7)|replace(".", ",") }} €</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section">
+        <h2>Vorsteuer</h2>
+        <table>
+            <tr>
+                <th>Zeile</th>
+                <th>Bezeichnung</th>
+                <th class="amount">Betrag</th>
+            </tr>
+            <tr>
+                <td>66</td>
+                <td>Abziehbare Vorsteuer (aus Ausgaben)</td>
+                <td class="amount">{{ "%.2f"|format(ustva.vorsteuer)|replace(".", ",") }} €</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section">
+        <table>
+            <tr>
+                <th>Zusammenfassung</th>
+                <th class="amount">Betrag</th>
+            </tr>
+            <tr class="total-row">
+                <td>
+                    {% if ustva.is_erstattung %}
+                    <strong>Erstattung (Vorsteuer übersteigt Umsatzsteuer)</strong>
+                    {% else %}
+                    <strong>Zahllast (an das Finanzamt)</strong>
+                    {% endif %}
+                </td>
+                <td class="amount"><strong>{{ "%.2f"|format(ustva.ustva_betrag)|replace(".", ",") }} €</strong></td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="notice">
+        <strong>Hinweis:</strong> Diese Aufstellung dient der internen Vorbereitung der Umsatzsteuervoranmeldung.
+        Die Abgabe erfolgt elektronisch über ELSTER oder durch den Steuerberater.
+        <br><br>
+        Abgabetermin für {{ ustva.period_label }}: {{ "10.04" if period == 1 else ("10.07" if period == 2 else ("10.10" if period == 3 else "10.01")) }}.{{ year + 1 if period == 4 else year }}
+    </div>
+
+    <div class="signature">
+        <div><div class="line">Ort, Datum</div></div>
+        <div><div class="line">Unterschrift</div></div>
+    </div>
+
+    <div class="footer">
+        {{ business_name }} · BTCRechnung · UStVA {{ ustva.period_label }}
+    </div>
+</body>
+</html>
