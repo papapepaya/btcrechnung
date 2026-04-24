@@ -357,7 +357,6 @@ class InvoiceRequest(BaseModel):
     items: List[InvoiceItem]
     # Bitcoin Details (optional)
     btc_address: Optional[str] = None
-    lightning_invoice: Optional[str] = None
     # Bank Details (optional, aus Settings geladen)
     iban: Optional[str] = None
     bic: Optional[str] = None
@@ -566,8 +565,9 @@ async def generate_pdf(request: InvoiceRequest):
                         total_btc = (total_gross * discount_factor) / btc_rate
                     
                     btc_uri = f"bitcoin:{btc_address}?amount={total_btc:.8f}"
-                    if request.lightning_invoice:
-                        btc_uri += f"&lightning={request.lightning_invoice}"
+                    lightning_address = settings.get("lightning_address")
+                    if lightning_address:
+                        btc_uri += f"&lightning={lightning_address}"
                     btc_qr = generate_qr_base64(btc_uri)
             except Exception as e:
                 print(f"BTC address generation failed: {e}")
@@ -599,7 +599,7 @@ async def generate_pdf(request: InvoiceRequest):
             btc_rate=btc_rate,
             btc_address=btc_address,
             btc_discount_percent=btc_discount_percent,
-            lightning_invoice=request.lightning_invoice,
+            lightning_address=settings.get("lightning_address"),
             iban=iban,
             bic=bic,
             bank_name=bank_name,
@@ -720,6 +720,9 @@ async def pay_page(request: Request, invoice_id: str):
     qr_btc = None
     if invoice.get("btc_address"):
         btc_uri = f"bitcoin:{invoice['btc_address']}?amount={btc_amount:.8f}"
+        lightning_address = settings.get("lightning_address")
+        if lightning_address:
+            btc_uri += f"&lightning={lightning_address}"
         qr_btc = generate_qr_base64(btc_uri)
     return templates.TemplateResponse("pay.html", {
         "request": request,
@@ -729,6 +732,7 @@ async def pay_page(request: Request, invoice_id: str):
         "btc_amount": btc_amount,
         "qr_btc": qr_btc,
         "btc_discount_percent": btc_discount_percent,
+        "lightning_address": settings.get("lightning_address"),
     })
 
 
@@ -1293,6 +1297,7 @@ async def settings_save(
     tax_id: str = Form(""),
     btc_xpub: str = Form(""),
     btc_discount_percent: str = Form("0"),
+    lightning_address: str = Form(""),
     logo: UploadFile = File(None),
     delete_logo: str = Form(""),
     logo_hidden: Optional[str] = Form(None),
@@ -1318,6 +1323,7 @@ async def settings_save(
         settings["btc_discount_percent"] = float(btc_discount_percent) if btc_discount_percent else 0
     except ValueError:
         settings["btc_discount_percent"] = 0
+    settings["lightning_address"] = lightning_address.strip() or None
     settings["logo_hidden"] = logo_hidden == "1"
 
     message = "Einstellungen gespeichert."

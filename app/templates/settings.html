@@ -138,37 +138,22 @@
                 <p class="hint">
                     Negativ = Rabatt (z.B. <code>-3</code> = 3% Preisnachlass bei Bitcoin-Zahlung).<br>
                     Positiv = Aufschlag (z.B. <code>+5</code> = 5% Aufpreis).<br>
-                    <code>0</code> = Kein Effekt.
+<code>0</code> = Kein Effekt.
                 </p>
             </div>
         </div>
 
-        <h2 style="margin-top: 24px;">Logo</h2>
-        <p style="font-size: 0.82rem; color: var(--gray-600); margin-bottom: 14px;">
-            Erscheint oben links auf der Rechnung. PNG oder SVG, max. 2 MB.
-        </p>
         <div class="form-row">
             <div class="field">
-                <label>Logo hochladen</label>
-                <input type="file" name="logo" accept="image/png,image/svg+xml,image/jpeg" style="padding: 8px;">
+                <label>Lightning-Adresse (optional)</label>
+                <input type="text" name="lightning_address" value="{{ settings.lightning_address or '' }}"
+                       placeholder="deinname@getalby.com" spellcheck="false" autocomplete="off">
+                <p class="hint">
+                    Z.B. <code>deinname@getalby.com</code> oder <code>name@walletofsatoshi.com</code>.<br>
+                    Wird automatisch für Bitcoin-Zahlungen im QR-Code eingefügt.
+                </p>
             </div>
         </div>
-        {% if settings.has_custom_logo %}
-        <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 14px; padding: 10px 14px; background: var(--gray-50); border-radius: var(--radius-sm);">
-            <span style="font-size: 0.82rem; color: var(--gray-600); flex: 1;">
-                Aktuelles Logo: <strong>logo.png</strong>
-            </span>
-            <label style="display: flex; align-items: center; gap: 6px; font-size: 0.82rem; cursor: pointer; white-space: nowrap;">
-                <input type="checkbox" name="logo_hidden" value="1" {% if settings.logo_hidden %}checked{% endif %}>
-                Ausblenden
-            </label>
-            <button type="submit" name="delete_logo" value="1"
-                    style="background: none; border: 1px solid var(--red); color: var(--red); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.78rem; cursor: pointer; white-space: nowrap;"
-                    onclick="return confirm('Logo wirklich löschen?');">
-                Löschen
-            </button>
-        </div>
-        {% endif %}
     </form>
 </div>
 

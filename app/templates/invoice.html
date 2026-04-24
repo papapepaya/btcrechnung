@@ -147,7 +147,7 @@
         {% if btc_address %}
         <div class="payment-box">
                     <div class="payment-title">
-                        <span style="font-weight: bold; margin-right: 4px; color: #F7931A;">BTC</span> Bitcoin / Lightning
+                        <span style="font-weight: bold; margin-right: 4px; color: #F7931A;">BTC</span> Bitcoin{% if lightning_address %} / Lightning{% endif %}
                     </div>
             <table class="qr-table">
                 <tr>
@@ -161,6 +161,9 @@
                         {% endif %}
                         <br><br>
                         <span style="font-size: 8px; color: #999;">{{ btc_address }}</span>
+                        {% if lightning_address %}
+                        <br><span style="font-size: 8px; color: #F7931A;">Lightning: {{ lightning_address }}</span>
+                        {% endif %}
                     </td>
                     <td style="width: 95px;">
                         <div class="qr-code">

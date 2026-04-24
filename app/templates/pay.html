@@ -254,6 +254,11 @@
                 <button class="copy-btn" id="copy-btn">Kopieren</button>
                 {{ invoice.btc_address }}
             </div>
+            {% if lightning_address %}
+            <div class="address-box" style="margin-top: 8px; color: #F7931A;">
+                Lightning: {{ lightning_address }}
+            </div>
+            {% endif %}
             {% endif %}
         </div>
 
