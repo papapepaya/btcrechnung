@@ -10,7 +10,7 @@
 - **Bitcoin + Lightning** Zahlung (optional, Live-Kurs via Kraken API)
 - **EÜR-Export** als PDF oder CSV
 - **Buchhaltung**: Ausgaben erfassen, Einnahmen verwalten, Dashboard
-- **Dark Mode** (System-Präferenz oder manuell)
+- **Dark Mode**
 - **Passwort-Schutz** (Login-System)
 - **Self-Hosted**: Läuft lokal oder auf dem eigenen Server
 - **Portable Build**: Einzelne .exe für Windows (kein Python nötig)
