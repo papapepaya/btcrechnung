@@ -42,6 +42,7 @@ DEFAULT_SETTINGS = {
     "tax_id": "",
     "license_email": "",
     "license_key": "",
+    "license_salt": None,
     "btc_discount_percent": 0,
     "lightning_address": None,
 }

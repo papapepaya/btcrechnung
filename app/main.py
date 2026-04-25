@@ -124,18 +124,44 @@ def _verify_password(password: str, stored: str) -> bool:
 LICENSE_SECRET = "BTCRechnung-2026-Secret-Key"
 
 
+def ensure_license_salt() -> str:
+    """Stellt sicher, dass ein Salt existiert und gibt ihn zurück."""
+    settings = bk.get_settings()
+    if not settings.get("license_salt"):
+        import secrets
+        settings["license_salt"] = secrets.token_hex(16)
+        bk.save_settings(settings)
+    return settings["license_salt"]
+
+
 def generate_license_key(email: str) -> str:
     """Generiert einen Lizenzschlüssel basierend auf E-Mail.
-    Format: PRO-XXXX-XXXX-XXXX-XXXX"""
-    key = hmac.new(LICENSE_SECRET.encode(), email.lower().encode(), hashlib.sha256).hexdigest()[:20]
+    Falls ein lokaler Salt existiert, wird dieser verwendet,
+    sonst der Server-Secret (für Rückwärtskompatibilität)."""
+    settings = bk.get_settings()
+    secret = settings.get("license_salt") or LICENSE_SECRET
+    key = hmac.new(secret.encode(), email.lower().encode(), hashlib.sha256).hexdigest()[:20]
     return "PRO-" + "-".join([key[i:i+4].upper() for i in range(0, 20, 4)])
 
 
 def verify_license(email: str, license_key: str) -> bool:
-    """Verifiziert ob der Lizenzschlüssel zur E-Mail passt."""
+    """Verifiziert ob der Lizenzschlüssel zur E-Mail passt.
+    Prüft sowohl lokalen Salt als auch Server-Secret (Rückwärtskompatibilität)."""
     if not email or not license_key:
         return False
-    expected = generate_license_key(email)
+    
+    # Mit lokalem Salt prüfen (neue Installationen)
+    settings = bk.get_settings()
+    if settings.get("license_salt"):
+        expected = generate_license_key(email)
+        if hmac.compare_digest(expected.upper(), license_key.upper().strip()):
+            return True
+    
+    # Mit Server-Secret prüfen (ältere Keys/Rückwärtskompatibilität)
+    settings = bk.get_settings()
+    secret = LICENSE_SECRET
+    expected = hmac.new(secret.encode(), email.lower().encode(), hashlib.sha256).hexdigest()[:20]
+    expected = "PRO-" + "-".join([expected[i:i+4].upper() for i in range(0, 20, 4)])
     return hmac.compare_digest(expected.upper(), license_key.upper().strip())
 
 
