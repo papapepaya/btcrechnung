@@ -554,18 +554,18 @@ async def generate_pdf(request: InvoiceRequest):
         # BTC-Adresse: xpub-basiert (unique pro Rechnung) oder manuell
         btc_address = None
         btc_qr = None
+        btc_discount_percent = settings.get("btc_discount_percent", 0)
+        lightning_address = settings.get("lightning_address")
         if request.enable_btc:
             try:
                 btc_address = get_next_btc_address() or request.btc_address
                 if btc_address:
                     # Rabatt/Aufschlag berechnen
-                    btc_discount_percent = settings.get("btc_discount_percent", 0)
                     if btc_discount_percent != 0:
                         discount_factor = 1 - (btc_discount_percent / 100)
                         total_btc = (total_gross * discount_factor) / btc_rate
                     
                     btc_uri = f"bitcoin:{btc_address}?amount={total_btc:.8f}"
-                    lightning_address = settings.get("lightning_address")
                     if lightning_address:
                         btc_uri += f"&lightning={lightning_address}"
                     btc_qr = generate_qr_base64(btc_uri)
