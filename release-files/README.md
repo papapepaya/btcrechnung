@@ -91,3 +91,9 @@ btcrechnung/
 ## Lizenz
 
 EUPL 1.2 – https://opensource.org/licenses/EUPL-1.2
+
+---
+
+## Haftungsausschluss
+
+Dieses Tool ist ein **Software-Produkt, keine Steuerberatung**. Wir übernehmen keine Verantwortung für die steuerrechtliche Konformität deiner Buchhaltung, Rechnungen oder EÜR. Für steuerliche Fragen empfehlen wir die Prüfung durch einen Steuerberater. Die Software wird ohne Gewährleistung bereitgestellt.

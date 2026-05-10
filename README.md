@@ -57,7 +57,7 @@ Browser: http://127.0.0.1:8000
 | MwSt auf Rechnungen | ❌ | ✅ |
 | Vorsteuer bei Ausgaben | ❌ | ✅ |
 | UStVA | ❌ | ✅ |
-| GoBD Audit-Log | ❌ | ✅ |
+| Audit-Log mit Prüfsummen | ❌ | ✅ |
 
 ## Bitcoin-Wallet einrichten
 
@@ -85,3 +85,9 @@ Siehe [docs/wallet-setup.md](docs/wallet-setup.md) für Details.
 ## Lizenz
 
 **European Union Public Licence (EUPL) 1.2** – siehe [LICENSE](LICENSE).
+
+---
+
+## Haftungsausschluss
+
+Dieses Tool ist ein **Software-Produkt, keine Steuerberatung**. Wir übernehmen keine Verantwortung für die steuerrechtliche Konformität deiner Buchhaltung, Rechnungen oder EÜR. Für steuerliche Fragen empfehlen wir die Prüfung durch einen Steuerberater. Die Software wird ohne Gewährleistung bereitgestellt.
