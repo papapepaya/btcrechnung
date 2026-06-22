@@ -23,12 +23,19 @@
 
 <div class="page-header-row">
     <h1>Einnahmenüberschussrechnung (EÜR)</h1>
-    <div class="year-selector">
-        <select onchange="location.href='/euer?year='+this.value">
-            {% for y in years %}
-            <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
-            {% endfor %}
-        </select>
+    <div style="display: flex; gap: 10px; align-items: center;">
+        <a href="/euer/pdf?year={{ year }}" class="btn btn-primary">EÜR als PDF</a>
+        <a href="/euer/csv?year={{ year }}" class="btn btn-secondary">EÜR als CSV</a>
+        {% if is_pro %}
+        <a href="/datev/export?year={{ year }}" class="btn btn-secondary">DATEV Export</a>
+        {% endif %}
+        <div class="year-selector">
+            <select onchange="location.href='/euer?year='+this.value">
+                {% for y in years %}
+                <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+        </div>
     </div>
 </div>
 
@@ -129,13 +136,5 @@
             </td>
         </tr>
     </table>
-</div>
-
-<div class="actions">
-    <a href="/euer/pdf?year={{ year }}" class="btn btn-primary">EÜR als PDF</a>
-    <a href="/euer/csv?year={{ year }}" class="btn btn-secondary">EÜR als CSV</a>
-    {% if is_pro %}
-    <a href="/datev/export?year={{ year }}" class="btn btn-secondary">DATEV Export</a>
-    {% endif %}
 </div>
 {% endblock %}
