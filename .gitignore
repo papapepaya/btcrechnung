@@ -40,13 +40,14 @@ key.pem
 # Node
 node_modules/
 
-# User Data (contains invoices, expenses, counter)
+# User Data (contains invoices, expenses, counter, saved PDFs)
 data/invoices.json
 data/expenses.json
 data/invoice_counter.json
 data/settings.json
 data/logo.png
 data/audit.json
+data/invoices/
 
 # Logs
 *.log

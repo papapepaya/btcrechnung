@@ -54,6 +54,9 @@
                 {% endif %}
             </td>
             <td style="text-align: right;">
+                {% if inv.get("invoice_filename") %}
+                <a href="/income/{{ inv.id }}/pdf" class="btn btn-sm btn-secondary" target="_blank">PDF</a>
+                {% endif %}
                 {% if inv.get("status") != "storniert" %}
                 {% if not inv.payment_received %}
                 <a href="/income/{{ inv.id }}/paid" class="btn btn-sm btn-secondary">Bezahlt</a>

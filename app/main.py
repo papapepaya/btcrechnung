@@ -64,7 +64,10 @@ BTC_ICON_PATH = os.path.join(PROJECT_DIR, "Bitcoin.png")
 if not os.path.exists(BTC_ICON_PATH):
     BTC_ICON_PATH = os.path.join(PROJECT_DIR, "Bitcoin.svg")
 COUNTER_FILE = os.path.join(DATA_DIR, "invoice_counter.json")
+PDF_DIR = os.path.join(DATA_DIR, "invoices")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
+
+os.makedirs(PDF_DIR, exist_ok=True)
 
 env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
 
@@ -693,6 +696,14 @@ async def generate_pdf(request: InvoiceRequest):
                 import traceback
                 traceback.print_exc()
 
+        # PDF auf Festplatte speichern
+        pdf_save_path = os.path.join(PDF_DIR, f"{invoice_no}.pdf")
+        try:
+            with open(pdf_save_path, "wb") as f:
+                f.write(pdf_content)
+        except Exception as e:
+            print(f"PDF speichern fehlgeschlagen: {e}")
+
         # Invoice in Buchhaltung loggen
         bk.log_invoice({
             "id": invoice_no,
@@ -1010,6 +1021,24 @@ async def mark_paid(
 async def cancel_income(invoice_id: str):
     bk.cancel_invoice(invoice_id)
     return Response(status_code=302, headers={"Location": "/income"})
+
+
+@app.get("/income/{invoice_id}/pdf")
+async def serve_invoice_pdf(invoice_id: str):
+    invoice = bk.get_invoice_by_id(invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Rechnung nicht gefunden")
+    filename = invoice.get("invoice_filename") or f"Rechnung_{invoice_id}.pdf"
+    pdf_path = os.path.join(PDF_DIR, f"{invoice_id}.pdf")
+    if not os.path.exists(pdf_path):
+        raise HTTPException(status_code=404, detail="PDF-Datei nicht gefunden")
+    with open(pdf_path, "rb") as f:
+        pdf_content = f.read()
+    return Response(
+        content=pdf_content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename={filename}"}
+    )
 
 
 # ---------------------------------------------------------------------------
