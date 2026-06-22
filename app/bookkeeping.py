@@ -65,6 +65,23 @@ def _save_json(filepath: str, data: list):
         json.dump(data, f, indent=2, default=str, ensure_ascii=False)
 
 
+def _migrate_status(data: list, default: str = "aktiv"):
+    for item in data:
+        if "status" not in item:
+            item["status"] = default
+    return data
+
+
+def get_active_invoices() -> list:
+    all_invs = get_all_invoices()
+    return [i for i in all_invs if i.get("status", "aktiv") == "aktiv"]
+
+
+def get_active_expenses() -> list:
+    all_exps = get_all_expenses()
+    return [e for e in all_exps if e.get("status", "aktiv") == "aktiv"]
+
+
 # ---------------------------------------------------------------------------
 # Settings
 # ---------------------------------------------------------------------------
@@ -131,7 +148,8 @@ def get_audit_log(record_type: str = None, record_id: str = None) -> list:
 # ---------------------------------------------------------------------------
 
 def get_all_expenses() -> list:
-    return _load_json(EXPENSES_FILE)
+    data = _load_json(EXPENSES_FILE)
+    return _migrate_status(data)
 
 
 def get_expense(expense_id: str) -> Optional[dict]:
@@ -140,6 +158,7 @@ def get_expense(expense_id: str) -> Optional[dict]:
 
 def create_expense(data: dict) -> dict:
     expenses = get_all_expenses()
+    data["status"] = "aktiv"
     year = datetime.date.today().year
     existing = [e for e in expenses if e["id"].startswith(f"EXP-{year}")]
     next_num = len(existing) + 1
@@ -162,15 +181,19 @@ def update_expense(expense_id: str, data: dict) -> Optional[dict]:
     return None
 
 
-def delete_expense(expense_id: str) -> bool:
+def cancel_expense(expense_id: str, reason: str = "") -> bool:
     expenses = get_all_expenses()
-    to_delete = [e for e in expenses if e["id"] == expense_id]
-    if not to_delete:
-        return False
-    _append_audit_log("delete", "expense", expense_id, to_delete[0])
-    new = [e for e in expenses if e["id"] != expense_id]
-    _save_json(EXPENSES_FILE, new)
-    return True
+    for e in expenses:
+        if e["id"] == expense_id:
+            if e.get("status") == "storniert":
+                return False
+            e["status"] = "storniert"
+            e["cancelled_at"] = datetime.datetime.now().isoformat()
+            e["cancelled_reason"] = reason
+            _append_audit_log("cancel", "expense", expense_id, dict(e))
+            _save_json(EXPENSES_FILE, expenses)
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -178,7 +201,8 @@ def delete_expense(expense_id: str) -> bool:
 # ---------------------------------------------------------------------------
 
 def get_all_invoices() -> list:
-    return _load_json(INVOICES_FILE)
+    data = _load_json(INVOICES_FILE)
+    return _migrate_status(data)
 
 
 def get_invoice_by_id(invoice_id: str) -> Optional[dict]:
@@ -190,6 +214,7 @@ def get_invoice_by_id(invoice_id: str) -> Optional[dict]:
 
 def log_invoice(data: dict) -> dict:
     invoices = get_all_invoices()
+    data["status"] = "aktiv"
     data["audit_hash"] = _compute_checksum(data)
     invoices.append(data)
     _save_json(INVOICES_FILE, invoices)
@@ -222,15 +247,21 @@ def mark_invoice_paid(invoice_id: str, payment_date: str,
     return None
 
 
-def delete_invoice(invoice_id: str) -> bool:
+def cancel_invoice(invoice_id: str, reason: str = "") -> bool:
     invoices = get_all_invoices()
-    to_delete = [i for i in invoices if i["id"] == invoice_id]
-    if not to_delete:
-        return False
-    _append_audit_log("delete", "invoice", invoice_id, to_delete[0])
-    new = [i for i in invoices if i["id"] != invoice_id]
-    _save_json(INVOICES_FILE, new)
-    return True
+    for inv in invoices:
+        if inv["id"] == invoice_id:
+            if inv.get("status") == "storniert":
+                return False
+            _append_audit_log("cancel_old", "invoice", invoice_id, dict(inv))
+            inv["status"] = "storniert"
+            inv["cancelled_at"] = datetime.datetime.now().isoformat()
+            inv["cancelled_reason"] = reason
+            inv["audit_hash"] = _compute_checksum(inv)
+            _save_json(INVOICES_FILE, invoices)
+            _append_audit_log("cancel_new", "invoice", invoice_id, dict(inv))
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -239,8 +270,8 @@ def delete_invoice(invoice_id: str) -> bool:
 
 def get_monthly_summary(year: int, month: int) -> dict:
     month_str = f"{year}-{month:02d}"
-    invoices = [i for i in get_all_invoices() if i["date"].startswith(month_str)]
-    expenses = [e for e in get_all_expenses() if e["date"].startswith(month_str)]
+    invoices = [i for i in get_active_invoices() if i["date"].startswith(month_str)]
+    expenses = [e for e in get_active_expenses() if e["date"].startswith(month_str)]
 
     total_income = sum(i["amount"] for i in invoices)
     total_expenses = sum(e["amount"] for e in expenses)
@@ -276,14 +307,14 @@ def get_yearly_summary(year: int) -> dict:
 def get_recent_transactions(limit: int = 10) -> list:
     """Get recent income and expenses combined, sorted by date descending."""
     transactions = []
-    for inv in get_all_invoices():
+    for inv in get_active_invoices():
         transactions.append({
             "date": inv["date"],
             "type": "Einnahme",
             "description": f"{inv['id']} – {inv['customer_name']}",
             "amount": inv["amount"],
         })
-    for exp in get_all_expenses():
+    for exp in get_active_expenses():
         transactions.append({
             "date": exp["date"],
             "type": "Ausgabe",
@@ -295,8 +326,8 @@ def get_recent_transactions(limit: int = 10) -> list:
 
 
 def generate_euer(year: int) -> dict:
-    expenses = [e for e in get_all_expenses() if e["date"].startswith(str(year))]
-    invoices = [i for i in get_all_invoices() if i["date"].startswith(str(year))]
+    expenses = [e for e in get_active_expenses() if e["date"].startswith(str(year))]
+    invoices = [i for i in get_active_invoices() if i["date"].startswith(str(year))]
 
     category_mapping = {
         "material_costs": ["studio_supplies"],
@@ -336,8 +367,8 @@ def generate_euer(year: int) -> dict:
 def calculate_ustva(year: int, period: int, period_type: str = "quarter") -> dict:
     """Berechnet die UStVA für ein Quartal oder Monat.
     period_type: 'quarter' (period: 1-4) oder 'month' (period: 1-12)"""
-    invoices = get_all_invoices()
-    expenses = get_all_expenses()
+    invoices = get_active_invoices()
+    expenses = get_active_expenses()
 
     if period_type == "month":
         months = [period]

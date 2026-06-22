@@ -36,14 +36,16 @@
             <th></th>
         </tr>
         {% for inv in invoices %}
-        <tr>
+        <tr {% if inv.get("status") == "storniert" %}style="opacity: 0.5; text-decoration: line-through;"{% endif %}>
             <td style="font-weight: 500;">{{ inv.id }}</td>
             <td>{{ inv.date[8:10] }}.{{ inv.date[5:7] }}.{{ inv.date[0:4] }}</td>
             <td>{{ inv.customer_name }}</td>
             <td>{{ inv.items_description[:50] }}{% if inv.items_description|length > 50 %}…{% endif %}</td>
             <td style="text-align: right;" class="positive">{{ "%.2f"|format(inv.amount) }} €</td>
             <td>
-                {% if inv.payment_received %}
+                {% if inv.get("status") == "storniert" %}
+                <span class="badge" style="background: #FFEBEE; color: #D32F2F;">Storniert</span>
+                {% elif inv.payment_received %}
                 <span class="badge badge-paid">Bezahlt</span>
                 {% if inv.get("payment_date") %}<br><span style="font-size: 0.75rem; color: var(--text-muted);">{{ inv.payment_date[8:10] }}.{{ inv.payment_date[5:7] }}.{{ inv.payment_date[0:4] }}</span>{% endif %}
                 {% if inv.get("payment_method") %}<br><span style="font-size: 0.75rem; color: var(--text-muted);">{{ payment_methods.get(inv.payment_method, inv.payment_method) }}</span>{% endif %}
@@ -52,14 +54,16 @@
                 {% endif %}
             </td>
             <td style="text-align: right;">
+                {% if inv.get("status") != "storniert" %}
                 {% if not inv.payment_received %}
                 <a href="/income/{{ inv.id }}/paid" class="btn btn-sm btn-secondary">Bezahlt</a>
                 {% else %}
                 <a href="/income/{{ inv.id }}/paid" class="btn btn-sm btn-secondary">Bearbeiten</a>
                 {% endif %}
-                <form method="POST" action="/income/{{ inv.id }}/delete" style="display:inline" onsubmit="return confirm('Rechnung wirklich löschen?')">
-                    <button type="submit" class="btn btn-sm btn-danger">Löschen</button>
+                <form method="POST" action="/income/{{ inv.id }}/cancel" style="display:inline" onsubmit="return confirm('Rechnung wirklich stornieren? Sie wird als storniert markiert und bleibt sichtbar.')">
+                    <button type="submit" class="btn btn-sm btn-danger">Stornieren</button>
                 </form>
+                {% endif %}
             </td>
         </tr>
         {% endfor %}

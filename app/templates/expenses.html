@@ -95,10 +95,11 @@
             <th>Lieferant</th>
             {% if business_type == 'regulaer' and is_pro %}<th style="text-align: right;">Vorsteuer</th>{% endif %}
             <th style="text-align: right;">Betrag</th>
+            <th>Status</th>
             <th></th>
         </tr>
         {% for exp in expenses %}
-        <tr>
+        <tr {% if exp.get("status") == "storniert" %}style="opacity: 0.5; text-decoration: line-through;"{% endif %}>
             <td>{{ exp.date[8:10] }}.{{ exp.date[5:7] }}.{{ exp.date[0:4] }}</td>
             <td>{{ exp.category_label }}</td>
             <td>{{ exp.description }}</td>
@@ -107,10 +108,19 @@
             <td style="text-align: right;" class="positive">{{ "%.2f"|format(exp.get('vat_amount', 0)) }} €</td>
             {% endif %}
             <td style="text-align: right;" class="negative">{{ "%.2f"|format(exp.amount) }} €</td>
+            <td>
+                {% if exp.get("status") == "storniert" %}
+                <span class="badge" style="background: #FFEBEE; color: #D32F2F;">Storniert</span>
+                {% else %}
+                <span class="badge badge-paid">Aktiv</span>
+                {% endif %}
+            </td>
             <td style="text-align: right;">
-                <form method="POST" action="/expenses/{{ exp.id }}/delete" style="display:inline" onsubmit="return confirm('Ausgabe wirklich löschen?')">
-                    <button type="submit" class="btn btn-sm btn-danger">Löschen</button>
+                {% if exp.get("status") != "storniert" %}
+                <form method="POST" action="/expenses/{{ exp.id }}/cancel" style="display:inline" onsubmit="return confirm('Ausgabe wirklich stornieren? Sie wird als storniert markiert und bleibt sichtbar.')">
+                    <button type="submit" class="btn btn-sm btn-danger">Stornieren</button>
                 </form>
+                {% endif %}
             </td>
         </tr>
         {% endfor %}

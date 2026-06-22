@@ -844,7 +844,7 @@ async def expenses_page(request: Request, year: Optional[int] = None, month: Opt
     for e in filtered:
         e["category_label"] = CATEGORY_LABELS.get(e["category"], e["category"])
 
-    total = sum(e["amount"] for e in filtered)
+    total = sum(e["amount"] for e in filtered if e.get("status", "aktiv") != "storniert")
 
     return templates.TemplateResponse("expenses.html", {
         "request": request,
@@ -895,9 +895,9 @@ async def create_expense(
     return Response(status_code=302, headers={"Location": "/expenses"})
 
 
-@app.post("/expenses/{expense_id}/delete")
-async def delete_expense(expense_id: str):
-    bk.delete_expense(expense_id)
+@app.post("/expenses/{expense_id}/cancel")
+async def cancel_expense(expense_id: str):
+    bk.cancel_expense(expense_id)
     return Response(status_code=302, headers={"Location": "/expenses"})
 
 
@@ -914,7 +914,7 @@ async def income_page(request: Request, year: Optional[int] = None, month: Optio
     if month:
         filtered = [i for i in filtered if i["date"].startswith(f"{year}-{month:02d}")]
 
-    total = sum(i["amount"] for i in filtered)
+    total = sum(i["amount"] for i in filtered if i.get("status", "aktiv") != "storniert")
 
     return templates.TemplateResponse("income.html", {
         "request": request,
@@ -1006,9 +1006,9 @@ async def mark_paid(
     return Response(status_code=302, headers={"Location": "/income"})
 
 
-@app.post("/income/{invoice_id}/delete")
-async def delete_income(invoice_id: str):
-    bk.delete_invoice(invoice_id)
+@app.post("/income/{invoice_id}/cancel")
+async def cancel_income(invoice_id: str):
+    bk.cancel_invoice(invoice_id)
     return Response(status_code=302, headers={"Location": "/income"})
 
 
@@ -1170,8 +1170,8 @@ async def euer_pdf(year: Optional[int] = None):
 async def euer_csv(year: Optional[int] = None):
     year = year or datetime.date.today().year
     biz = get_business_info()
-    invoices = [i for i in bk.get_all_invoices() if i["date"].startswith(str(year))]
-    expenses = [e for e in bk.get_all_expenses() if e["date"].startswith(str(year))]
+    invoices = [i for i in bk.get_active_invoices() if i["date"].startswith(str(year))]
+    expenses = [e for e in bk.get_active_expenses() if e["date"].startswith(str(year))]
     euer = bk.generate_euer(year)
 
     output = io.StringIO()
@@ -1232,8 +1232,8 @@ async def datev_export(year: Optional[int] = None):
     year = year or datetime.date.today().year
     biz = get_business_info()
     settings = bk.get_settings()
-    invoices = [i for i in bk.get_all_invoices() if i["date"].startswith(str(year))]
-    expenses = [e for e in bk.get_all_expenses() if e["date"].startswith(str(year))]
+    invoices = [i for i in bk.get_active_invoices() if i["date"].startswith(str(year))]
+    expenses = [e for e in bk.get_active_expenses() if e["date"].startswith(str(year))]
 
     output = io.StringIO()
     w = csv.writer(output, delimiter=";")
