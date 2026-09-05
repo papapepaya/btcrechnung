@@ -40,8 +40,9 @@ def _xsd_validate(xml: bytes, profile: str) -> bool:
     import glob
     import os
     from lxml import etree
-    base = os.path.join(os.path.dirname(__file__), "..", ".venv", "lib")
-    cands = glob.glob(os.path.join(base, "python*/site-packages/facturx/xsd",
+    import facturx
+    pkgdir = os.path.dirname(facturx.__file__)
+    cands = glob.glob(os.path.join(pkgdir, "xsd",
                                    f"facturx-{profile}", f"FACTUR-X_{profile.upper()}.xsd"))
     assert cands, f"kein XSD fuer {profile}"
     schema = etree.XMLSchema(etree.parse(cands[0]))
