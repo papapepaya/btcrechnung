@@ -69,12 +69,12 @@
         {% if error %}<div class="error">{{ error }}</div>{% endif %}
         <form method="POST" action="/setup">
             <div class="field">
-                <label>Passwort (min. 4 Zeichen)</label>
-                <input type="password" name="password" autofocus required minlength="4" placeholder="Passwort wählen">
+                <label>Passwort (min. 8 Zeichen)</label>
+                <input type="password" name="password" autofocus required minlength="8" placeholder="Passwort wählen">
             </div>
             <div class="field">
                 <label>Passwort bestätigen</label>
-                <input type="password" name="password_confirm" required minlength="4" placeholder="Passwort wiederholen">
+                <input type="password" name="password_confirm" required minlength="8" placeholder="Passwort wiederholen">
             </div>
             <button type="submit" class="btn">Einrichten & Anmelden</button>
         </form>

@@ -7,10 +7,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <link rel="manifest" href="/static/manifest.json">
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="apple-touch-icon" href="/static/icon-192.png">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
     <title>{% block title %}Buchhaltung{% endblock %} – BTCRechnung</title>
     <style>
         :root {
@@ -31,6 +30,12 @@
             --radius-md: 10px;
             --radius-lg: 14px;
             --transition: all 0.2s ease;
+            --gray-100: #F5F5F5;
+            --gray-200: #EEEEEE;
+            --gray-300: #E0E0E0;
+            --gray-400: #BDBDBD;
+            --gray-500: #9E9E9E;
+            --gray-600: #666666;
         }
 
         /* Light Mode */
@@ -91,8 +96,13 @@
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
+        :focus-visible {
+            outline: 2px solid var(--orange);
+            outline-offset: 2px;
+        }
+
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
             background: var(--bg);
             color: var(--text);
             line-height: 1.5;
@@ -105,7 +115,7 @@
             padding: 0 24px;
             display: flex;
             align-items: stretch;
-            overflow-x: auto;
+            overflow: visible;
             box-shadow: var(--shadow-sm);
             position: sticky;
             top: 0;
@@ -126,17 +136,10 @@
             white-space: nowrap;
         }
 
-        nav .brand-icon {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 32px;
-            height: 32px;
-            background: var(--orange);
-            color: #fff;
+        nav .brand img {
+            width: 28px;
+            height: 28px;
             border-radius: var(--radius-sm);
-            font-size: 1rem;
-            font-weight: 800;
         }
 
         nav a {
@@ -161,6 +164,28 @@
             color: var(--orange);
             border-bottom-color: var(--orange);
         }
+
+        /* Mehr-Dropdown */
+        .nav-more { position: relative; display: flex; align-items: stretch; }
+        .nav-more-btn {
+            background: none; border: none; border-bottom: 2px solid transparent;
+            color: var(--nav-text); padding: 16px 18px; font-size: 0.88rem;
+            font-weight: 500; font-family: inherit; cursor: pointer; white-space: nowrap;
+        }
+        .nav-more-btn:hover { color: var(--orange); background: var(--nav-hover-bg); }
+        .nav-more.active .nav-more-btn { color: var(--orange); border-bottom-color: var(--orange); }
+        .nav-more-menu {
+            display: none; position: absolute; top: 100%; left: 0; min-width: 200px;
+            background: var(--bg-nav); border: 1px solid var(--border);
+            border-radius: 0 0 var(--radius-md) var(--radius-md);
+            box-shadow: var(--shadow-md); z-index: 200; padding: 6px;
+        }
+        .nav-more:hover .nav-more-menu, .nav-more:focus-within .nav-more-menu { display: block; }
+        .nav-more-menu a {
+            display: block; padding: 10px 14px; border-bottom: none;
+            border-radius: var(--radius-sm);
+        }
+        .nav-more-menu a.active { background: var(--nav-hover-bg); }
 
         /* Dark Mode Toggle */
         .theme-toggle {
@@ -370,6 +395,7 @@
         }
 
         /* Tables */
+        .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -530,8 +556,9 @@
         @media (max-width: 768px) {
             .form-row { flex-direction: column; gap: 10px; }
             .stats-grid { grid-template-columns: repeat(2, 1fr); }
-            nav { padding: 0 12px; }
+            nav { padding: 0 12px; flex-wrap: wrap; }
             nav a { padding: 12px 10px; font-size: 0.8rem; }
+            .nav-more-btn { padding: 12px 10px; font-size: 0.8rem; }
             .card { padding: 20px; }
             h1 { font-size: 1.35rem; }
             .container { padding: 20px 16px; }
@@ -548,15 +575,27 @@
 <body>
     <nav>
         <a href="/dashboard" class="brand">
-            <span class="brand-icon">₿</span>
+            <img src="/static/favicon.svg" alt="" width="24" height="24" style="border-radius: 6px;">
             <span>BTCRechnung</span>
         </a>
         <a href="/dashboard" {% if active_page == 'dashboard' %}class="active"{% endif %}>Übersicht</a>
-        <a href="/expenses" {% if active_page == 'expenses' %}class="active"{% endif %}>Ausgaben</a>
-        <a href="/income" {% if active_page == 'income' %}class="active"{% endif %}>Einnahmen</a>
-        <a href="/euer" {% if active_page == 'euer' %}class="active"{% endif %}>EÜR</a>
-        {% if business_type == 'regulaer' and is_pro %}<a href="/ustva" {% if active_page == 'ustva' %}class="active"{% endif %}>UStVA</a>{% endif %}
         <a href="/invoice" {% if active_page == 'invoice' %}class="active"{% endif %}>Rechnung</a>
+        <a href="/quotes" {% if active_page == 'quotes' %}class="active"{% endif %}>Angebote</a>
+        <a href="/income" {% if active_page == 'income' %}class="active"{% endif %}>Einnahmen</a>
+        <a href="/expenses" {% if active_page == 'expenses' %}class="active"{% endif %}>Ausgaben</a>
+        <div class="nav-more {% if active_page in ['timelog', 'assets', 'customers', 'recurring', 'euer', 'ustva', 'bank', 'cashbook'] %}active{% endif %}">
+            <button class="nav-more-btn" aria-haspopup="true">Mehr ▾</button>
+            <div class="nav-more-menu">
+                <a href="/zeiten" {% if active_page == 'timelog' %}class="active"{% endif %}>Zeiten</a>
+                <a href="/anlagen" {% if active_page == 'assets' %}class="active"{% endif %}>Anlagen</a>
+                <a href="/customers" {% if active_page == 'customers' %}class="active"{% endif %}>Kunden</a>
+                <a href="/recurring" {% if active_page == 'recurring' %}class="active"{% endif %}>Abos</a>
+                <a href="/euer" {% if active_page == 'euer' %}class="active"{% endif %}>EÜR</a>
+                {% if business_type == 'regulaer' and is_pro %}<a href="/ustva" {% if active_page == 'ustva' %}class="active"{% endif %}>UStVA</a>{% endif %}
+                {% if is_pro %}<a href="/bank" {% if active_page == 'bank' %}class="active"{% endif %}>Bank</a>{% endif %}
+                {% if is_pro %}<a href="/kassenbuch" {% if active_page == 'cashbook' %}class="active"{% endif %}>Kasse</a>{% endif %}
+            </div>
+        </div>
         <a href="/settings" {% if active_page == 'settings' %}class="active"{% endif %} style="margin-left: auto;">⚙ Einstellungen</a>
         <button class="theme-toggle" id="themeToggle" title="Dark Mode umschalten">☀</button>
     </nav>

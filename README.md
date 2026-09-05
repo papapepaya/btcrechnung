@@ -6,14 +6,15 @@
 
 ## Features
 
-- **Rechnungen als PDF** mit ZUGFeRD 2.2 E-Rechnung
-- **Bitcoin + Lightning** Zahlung (optional, Live-Kurs via Kraken API)
-- **EÜR-Export** als PDF oder CSV
-- **Buchhaltung**: Ausgaben erfassen, Einnahmen verwalten, Dashboard
+- **Rechnungen als PDF** mit ZUGFeRD 2.2 E-Rechnung (Basic + XRechnung mit Leitweg-ID)
+- **Bitcoin + Lightning** Zahlung (optional, Live-Kurs via Kraken API, BTCPay-Webhook)
+- **Angebote** mit 1-Klick-Umwandlung in Rechnungen, **Kundenstamm**, **Abos**, **Mahnwesen** mit Mahn-PDF
+- **EÜR-Export** als PDF oder CSV, **GoBD-Export** (ZIP), DATEV-Export (Pro)
+- **Buchhaltung**: Ausgaben mit Beleg-OCR, Einnahmen, Dashboard, Bankimport (CSV/CAMT, Pro), Kassenbuch (Pro), Zeiterfassung, Anlagen mit AfA-Rechner
 - **Dark Mode**
-- **Passwort-Schutz** (Login-System)
+- **Passwort-Schutz** (Login-System, Rate-Limit, CSRF)
 - **Self-Hosted**: Läuft lokal oder auf dem eigenen Server
-- **Portable Build**: Einzelne .exe für Windows (kein Python nötig)
+- **Portable Builds**: Windows `.exe`, Linux-Binary oder Docker (`docker compose up`)
 
 ## Schnellstart
 
@@ -53,10 +54,12 @@ Browser: http://127.0.0.1:8000
 |---------|-------------|-----------|
 | Rechnungen mit ZUGFeRD | ✅ (0% MwSt) | ✅ (mit MwSt) |
 | Bitcoin-Zahlung | ✅ | ✅ |
-| EÜR Export | ✅ | ✅ |
+| Angebote, Abos, Mahnwesen | ✅ | ✅ |
+| EÜR + GoBD-Export | ✅ | ✅ |
 | MwSt auf Rechnungen | ❌ | ✅ |
 | Vorsteuer bei Ausgaben | ❌ | ✅ |
 | UStVA | ❌ | ✅ |
+| Bankimport + Kassenbuch | ❌ | ✅ |
 | Audit-Log mit Prüfsummen | ❌ | ✅ |
 
 ## Bitcoin-Wallet einrichten
@@ -78,9 +81,9 @@ Siehe [docs/wallet-setup.md](docs/wallet-setup.md) für Details.
 | PDF | xhtml2pdf |
 | ZUGFeRD | factur-x v1.10 |
 | QR-Codes | qrcode + Pillow |
-| Bitcoin | bip-utils, Kraken API, Blockstream API |
-| Daten | JSON-Dateien (lokal) |
-| Build | PyInstaller (Windows) |
+| Bitcoin | bip-utils, Kraken API, Blockstream API, BTCPay-Webhook |
+| Daten | SQLite (WAL, lokal, mit JSON-Migration) |
+| Build | PyInstaller (Windows + Linux), Docker |
 
 ## Lizenz
 

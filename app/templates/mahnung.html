@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page { size: A4; margin: 55px; }
+        body { font-family: 'Helvetica', sans-serif; color: #333; font-size: 13px; line-height: 1.5; }
+        .title { font-size: 20px; font-weight: bold; margin: 30px 0 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th { text-align: left; border-bottom: 2px solid #000; padding: 8px; }
+        td { padding: 8px; border-bottom: 1px solid #eee; }
+        .total { text-align: right; font-size: 16px; font-weight: bold; margin-top: 16px; }
+    </style>
+</head>
+<body>
+    <div><strong>{{ studio_name }}</strong><br>{{ studio_address }}</div>
+    <div style="margin-top: 30px;"><strong>{{ invoice.customer_name }}</strong><br>{{ invoice.customer_address|replace('\n', '<br>') }}</div>
+    <div class="title">{{ level_title }} – Rechnung {{ invoice.id }}</div>
+    <p>Sehr geehrte Damen und Herren,</p>
+    <p>die Rechnung <strong>{{ invoice.id }}</strong> vom {{ invoice.date }} über
+    <strong>{{ "%.2f"|format(invoice.amount)|replace(".", ",") }} €</strong>
+    (fällig seit {{ due }}) ist trotz Fälligkeit noch offen.</p>
+    <p>Bitte begleichen Sie den Betrag bis zum <strong>{{ new_due }}</strong>.</p>
+    <table>
+        <tr><th>Position</th><th style="text-align:right;">Betrag</th></tr>
+        <tr><td>Offener Rechnungsbetrag</td><td style="text-align:right;">{{ "%.2f"|format(invoice.amount)|replace(".", ",") }} €</td></tr>
+        <tr><td>Mahngebühr (Stufe {{ level }})</td><td style="text-align:right;">{{ "%.2f"|format(fee)|replace(".", ",") }} €</td></tr>
+        {% if interest and interest > 0 %}<tr><td>Verzugszinsen ({{ interest_rate }}% p.a., {{ days }} Tage)</td><td style="text-align:right;">{{ "%.2f"|format(interest)|replace(".", ",") }} €</td></tr>{% endif %}
+    </table>
+    <div class="total">Zu zahlen: {{ "%.2f"|format(total)|replace(".", ",") }} €</div>
+    <p>IBAN: {{ iban }} · BIC: {{ bic }} · Verwendungszweck: {{ invoice.id }}</p>
+    <p>Bei bereits erfolgter Zahlung betrachten Sie dieses Schreiben als gegenstandslos.</p>
+    <p>Mit freundlichen Grüßen<br>{{ studio_name }}</p>
+</body>
+</html>

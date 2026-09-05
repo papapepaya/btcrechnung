@@ -14,6 +14,7 @@
     </div>
 
     <form method="POST" action="/income/{{ invoice.id }}/paid">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
         <div class="form-row">
             <div class="field">
                 <label>Zahlungsdatum</label>

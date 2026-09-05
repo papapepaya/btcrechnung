@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Anlagen & AfA{% endblock %}
+{% block content %}
+<div class="page-header-row">
+    <h1>Anlagevermögen & AfA {{ year }}</h1>
+    <div class="year-selector">
+        <select onchange="location.href='/anlagen?year='+this.value">
+            {% for y in years %}<option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>{% endfor %}
+        </select>
+    </div>
+</div>
+<div class="card">
+    <h2>Neues Anlagegut</h2>
+    <form method="POST" action="/anlagen">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <div class="form-row">
+            <div class="field">
+                <label>Bezeichnung</label>
+                <input type="text" name="name" required placeholder="z.B. Kamera Sony A7">
+            </div>
+            <div class="field" style="max-width: 160px;">
+                <label>Anschaffung</label>
+                <input type="date" name="purchase_date" value="{{ today }}" required>
+            </div>
+            <div class="field" style="max-width: 140px;">
+                <label>Kosten (€ netto)</label>
+                <input type="text" name="cost" required value="0" inputmode="decimal">
+            </div>
+            <div class="field" style="max-width: 150px;">
+                <label>Nutzung (Jahre)</label>
+                <input type="number" name="years" value="3" min="1" max="50">
+                <p class="hint">AfA-Tabelle: Fotoapparate 7 J., Computer 3 J.</p>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Hinzufügen</button>
+        <p class="hint">Bis {{ "%.0f"|format(gwg_limit) }} € = GWG (Sofortabschreibung). Anlagegüter bitte <strong>nicht zusätzlich</strong> als Ausgabe buchen – die AfA fließt automatisch in die EÜR ein.</p>
+    </form>
+</div>
+<div class="card">
+    <h2>AfA {{ year }} – gesamt {{ "%.2f"|format(afa_total)|replace(".", ",") }} € (in EÜR enthalten)</h2>
+    {% if afa_rows %}
+    <div class="table-wrap">
+    <table>
+        <tr><th>Gut</th><th>Kauf</th><th>Kosten</th><th>Dauer</th><th style="text-align:right;">AfA {{ year }}</th><th>Bemerkung</th></tr>
+        {% for a in afa_rows %}
+        <tr>
+            <td>{{ a.name }}{% if a.is_gwg %} <span class="badge badge-paid">GWG</span>{% endif %}</td>
+            <td>{{ a.purchase_date }}</td>
+            <td style="text-align:right;">{{ "%.2f"|format(a.cost)|replace(".", ",") }} €</td>
+            <td>{{ a.years }} J.</td>
+            <td style="text-align:right;" class="positive">{{ "%.2f"|format(a.afa)|replace(".", ",") }} €</td>
+            <td>{{ a.note }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    </div>
+    {% else %}
+    <div class="no-data">Keine AfA für {{ year }}.</div>
+    {% endif %}
+</div>
+<div class="card">
+    <h2>Alle Anlagegüter ({{ assets|length }})</h2>
+    {% if assets %}
+    <div class="table-wrap">
+    <table>
+        <tr><th>Bezeichnung</th><th>Kauf</th><th>Kosten</th><th></th></tr>
+        {% for a in assets %}
+        <tr>
+            <td>{{ a.name }}</td>
+            <td>{{ a.purchase_date }}</td>
+            <td style="text-align:right;">{{ "%.2f"|format(a.cost)|replace(".", ",") }} €</td>
+            <td><form method="POST" action="/anlagen/{{ a._row_id }}/delete" style="display:inline" onsubmit="return confirm('Wirklich löschen?')"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button type="submit" class="btn btn-sm btn-secondary">Löschen</button></form></td>
+        </tr>
+        {% endfor %}
+    </table>
+    </div>
+    {% else %}
+    <div class="no-data">Noch keine Anlagegüter.</div>
+    {% endif %}
+</div>
+{% endblock %}

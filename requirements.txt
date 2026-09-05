@@ -11,3 +11,5 @@ requests>=2.31.0
 python-multipart>=0.0.6
 setuptools<71
 bip-utils>=2.12.0
+cryptography>=41.0.0
+pytesseract>=0.3.10

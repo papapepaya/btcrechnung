@@ -65,9 +65,11 @@ if not os.path.exists(BTC_ICON_PATH):
     BTC_ICON_PATH = os.path.join(PROJECT_DIR, "Bitcoin.svg")
 COUNTER_FILE = os.path.join(DATA_DIR, "invoice_counter.json")
 PDF_DIR = os.path.join(DATA_DIR, "invoices")
+RECEIPTS_DIR = os.path.join(DATA_DIR, "receipts")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 
 os.makedirs(PDF_DIR, exist_ok=True)
+os.makedirs(RECEIPTS_DIR, exist_ok=True)
 
 env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
 
@@ -77,7 +79,7 @@ class SimpleTemplates:
     Vermeidet den 'unhashable dict' Bug mit PyInstaller."""
     def __init__(self, env):
         self.env = env
-    def TemplateResponse(self, name, context):
+    def TemplateResponse(self, name, context, status_code: int = 200):
         from starlette.responses import HTMLResponse
         # Business-Typ und Pro-Status automatisch injizieren
         if "is_pro" not in context:
@@ -92,8 +94,19 @@ class SimpleTemplates:
                 context["business_type"] = bt if context.get("is_pro") else "kleinunternehmer"
             except Exception:
                 context["business_type"] = "kleinunternehmer"
+        if "csrf_token" not in context:
+            try:
+                from . import auth as authmod
+                req = context.get("request")
+                tok = req.cookies.get("session") if req is not None else None
+                context["csrf_token"] = authmod.csrf_token_for_session(bk, tok) if tok else ""
+            except Exception:
+                context["csrf_token"] = ""
+        if "purchase_url" not in context:
+            context["purchase_url"] = os.environ.get(
+                "PURCHASE_URL", "https://buy.stripe.com/8x2eV64zxeFh7F9bf628804")
         html = self.env.get_template(name).render(**context)
-        return HTMLResponse(html)
+        return HTMLResponse(html, status_code=status_code)
 
 
 templates = SimpleTemplates(env)
@@ -107,17 +120,13 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 # ---------------------------------------------------------------------------
 
 def _hash_password(password: str) -> str:
-    salt = secrets.token_hex(16)
-    h = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 100_000)
-    return f"{salt}${h.hex()}"
+    from . import auth as authmod
+    return authmod.hash_password(password)
 
 
 def _verify_password(password: str, stored: str) -> bool:
-    if not stored or "$" not in stored:
-        return False
-    salt, hash_hex = stored.split("$", 1)
-    h = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 100_000)
-    return hmac.compare_digest(h.hex(), hash_hex)
+    from . import auth as authmod
+    return authmod.verify_password(password, stored)
 
 
 # ---------------------------------------------------------------------------
@@ -138,34 +147,23 @@ def ensure_license_salt() -> str:
 
 
 def generate_license_key(email: str) -> str:
-    """Generiert einen Lizenzschlüssel basierend auf E-Mail.
-    Falls ein lokaler Salt existiert, wird dieser verwendet,
-    sonst der Server-Secret (für Rückwärtskompatibilität)."""
+    from . import license as licmod
     settings = bk.get_settings()
     secret = settings.get("license_salt") or LICENSE_SECRET
-    key = hmac.new(secret.encode(), email.lower().encode(), hashlib.sha256).hexdigest()[:20]
-    return "PRO-" + "-".join([key[i:i+4].upper() for i in range(0, 20, 4)])
+    return licmod.legacy_key_for(email, secret)
 
 
 def verify_license(email: str, license_key: str) -> bool:
-    """Verifiziert ob der Lizenzschlüssel zur E-Mail passt.
-    Prüft sowohl lokalen Salt als auch Server-Secret (Rückwärtskompatibilität)."""
+    from . import license as licmod
     if not email or not license_key:
         return False
-    
-    # Mit lokalem Salt prüfen (neue Installationen)
+    lk = license_key.strip()
+    if lk.upper().startswith("PRO2-"):
+        return licmod.verify_ed25519(email, lk)
     settings = bk.get_settings()
-    if settings.get("license_salt"):
-        expected = generate_license_key(email)
-        if hmac.compare_digest(expected.upper(), license_key.upper().strip()):
-            return True
-    
-    # Mit Server-Secret prüfen (ältere Keys/Rückwärtskompatibilität)
-    settings = bk.get_settings()
-    secret = LICENSE_SECRET
-    expected = hmac.new(secret.encode(), email.lower().encode(), hashlib.sha256).hexdigest()[:20]
-    expected = "PRO-" + "-".join([expected[i:i+4].upper() for i in range(0, 20, 4)])
-    return hmac.compare_digest(expected.upper(), license_key.upper().strip())
+    if licmod.verify_legacy(email, lk, settings.get("license_salt")):
+        return True
+    return licmod.verify_legacy(email, lk, None)
 
 
 def is_pro_license() -> bool:
@@ -207,17 +205,23 @@ def _is_setup_needed() -> bool:
 
 
 def _is_authenticated(request: Request) -> bool:
-    token = request.cookies.get("session")
-    if not token:
-        return False
-    secret = _get_session_secret()
-    expected = hmac.new(secret.encode(), b"authenticated", hashlib.sha256).hexdigest()
-    return hmac.compare_digest(token, expected)
+    from . import auth as authmod
+    return authmod.is_valid_session(bk, request.cookies.get("session"))
 
 
 def _make_session_token() -> str:
-    secret = _get_session_secret()
-    return hmac.new(secret.encode(), b"authenticated", hashlib.sha256).hexdigest()
+    from . import auth as authmod
+    return authmod.create_session(bk)
+
+
+def _set_session_cookie(response: Response, token: str, request: Request | None = None):
+    secure = False
+    try:
+        if request is not None and request.url.scheme == "https":
+            secure = True
+    except Exception:
+        pass
+    response.set_cookie("session", token, httponly=True, samesite="lax", secure=secure, max_age=86400 * 30)
 
 
 # ---------------------------------------------------------------------------
@@ -241,9 +245,9 @@ async def setup_save(request: Request):
     form = await request.form()
     password = form.get("password", "")
     password_confirm = form.get("password_confirm", "")
-    if len(password) < 4:
+    if len(password) < 8:
         return templates.TemplateResponse("setup.html", {
-            "request": request, "error": "Passwort muss mindestens 4 Zeichen lang sein."
+            "request": request, "error": "Passwort muss mindestens 8 Zeichen lang sein."
         })
     if password != password_confirm:
         return templates.TemplateResponse("setup.html", {
@@ -253,7 +257,7 @@ async def setup_save(request: Request):
     settings["password_hash"] = _hash_password(password)
     bk.save_settings(settings)
     response = Response(status_code=302, headers={"Location": "/"})
-    response.set_cookie("session", _make_session_token(), httponly=True, max_age=86400 * 30)
+    _set_session_cookie(response, _make_session_token(), request)
     return response
 
 
@@ -268,39 +272,68 @@ async def login_page(request: Request):
 
 @app.post("/login")
 async def login_submit(request: Request):
+    from . import auth as authmod
+    if authmod.is_blocked(request):
+        return templates.TemplateResponse("login.html", {
+            "request": request, "error": "Zu viele Versuche. Bitte 60 Sekunden warten."
+        })
     form = await request.form()
     password = form.get("password", "")
     settings = bk.get_settings()
     if _is_setup_needed():
         return Response(status_code=302, headers={"Location": "/setup"})
     if _verify_password(password, settings.get("password_hash", "")):
+        authmod.record_success(request)
         response = Response(status_code=302, headers={"Location": "/"})
-        response.set_cookie("session", _make_session_token(), httponly=True, max_age=86400 * 30)
+        _set_session_cookie(response, _make_session_token(), request)
         return response
+    authmod.record_fail(request)
     return templates.TemplateResponse("login.html", {
         "request": request, "error": "Falsches Passwort."
     })
 
 
 @app.get("/logout")
-async def logout():
+async def logout(request: Request):
+    from . import auth as authmod
+    authmod.destroy_session(bk, request.cookies.get("session"))
     response = Response(status_code=302, headers={"Location": "/login"})
     response.delete_cookie("session")
     return response
 
 
+CSRF_EXEMPT = {"/login", "/setup", "/health", "/generate-pdf", "/webhook/btcpay"}
+
+
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
+    from . import auth as authmod
     path = request.url.path
-    # Öffentliche Pfade
-    if path in PUBLIC_PATHS or path.startswith("/static") or path.startswith("/pay/") or path.startswith("/api/pay/"):
+    if path in PUBLIC_PATHS or path.startswith("/static") or path.startswith("/pay/") or path.startswith("/api/pay/") or path.startswith("/webhook/"):
         return await call_next(request)
-    # Auth-Check
     if _is_setup_needed():
         return Response(status_code=302, headers={"Location": "/setup"})
     if not _is_authenticated(request):
         return Response(status_code=302, headers={"Location": "/login"})
-    return await call_next(request)
+    if request.method == "POST" and path not in CSRF_EXEMPT:
+        try:
+            # body() ZUERST aufrufen: cached den Body, damit Downstream
+            # (Route) das Formular erneut lesen kann (Starlette replayt nur
+            # _body, nicht einen per stream() konsumierten Body).
+            await request.body()
+            form = await request.form()
+            provided = form.get("_csrf") or request.headers.get("x-csrf-token")
+        except Exception:
+            provided = request.headers.get("x-csrf-token")
+        if not authmod.check_csrf(bk, request.cookies.get("session"), provided):
+            return Response(status_code=403, content="CSRF-Check fehlgeschlagen")
+    resp = await call_next(request)
+    if request.cookies.get("session") and "csrf_token" not in request.cookies:
+        try:
+            resp.set_cookie("csrf_token", authmod.csrf_token_for_session(bk, request.cookies.get("session")), samesite="lax", max_age=86400 * 30)
+        except Exception:
+            pass
+    return resp
 
 MONTH_NAMES = ["Januar", "Februar", "März", "April", "Mai", "Juni",
                "Juli", "August", "September", "Oktober", "November", "Dezember"]
@@ -346,30 +379,78 @@ def _get_available_years():
 # ---------------------------------------------------------------------------
 
 def _ensure_data_dir():
-    data_dir = os.path.join(PROJECT_DIR, "data")
-    os.makedirs(data_dir, exist_ok=True)
+    os.makedirs(DATA_DIR, exist_ok=True)
 
 
 def _get_next_invoice_number() -> str:
     _ensure_data_dir()
     year = datetime.date.today().year
-    counter = {"year": year, "last_number": 0}
-
-    if os.path.exists(COUNTER_FILE):
+    try:
+        from . import db as dbmod
+        dbmod.init_schema()
+        con = dbmod.connect()
         try:
-            with open(COUNTER_FILE, "r") as f:
-                saved = json.load(f)
-            if saved.get("year") == year:
-                counter = saved
-        except (json.JSONDecodeError, IOError):
-            pass
-
-    counter["year"] = year
-    counter["last_number"] += 1
-
-    with open(COUNTER_FILE, "w") as f:
-        json.dump(counter, f)
-
+            con.execute("BEGIN IMMEDIATE")
+            row = con.execute("SELECT last_number FROM counters WHERE year=?", (year,)).fetchone()
+            last = row[0] if row else 0
+            try:
+                rows = con.execute("SELECT id FROM invoices WHERE id LIKE ?", (f"RE-{year}%",)).fetchall()
+                nums = []
+                for (eid,) in rows:
+                    try:
+                        nums.append(int(eid.rsplit("-", 1)[-1]))
+                    except ValueError:
+                        pass
+                if nums:
+                    last = max(last, max(nums))
+            except Exception:
+                pass
+            last += 1
+            con.execute("INSERT OR REPLACE INTO counters (year, last_number) VALUES (?, ?)", (year, last))
+            con.execute("COMMIT")
+            return f"RE-{year}-{last:04d}"
+        except Exception:
+            try:
+                con.execute("ROLLBACK")
+            except Exception:
+                pass
+            raise
+        finally:
+            con.close()
+    except Exception as e:
+        print(f"Counter DB-Fallback: {e}")
+    counter = {"year": year, "last_number": 0}
+    lock_path = COUNTER_FILE + ".lock"
+    try:
+        import fcntl
+        use_fcntl = True
+    except ImportError:
+        use_fcntl = False
+    os.makedirs(os.path.dirname(COUNTER_FILE), exist_ok=True)
+    with open(lock_path, "w") as lock_fp:
+        try:
+            if use_fcntl:
+                fcntl.flock(lock_fp.fileno(), fcntl.LOCK_EX)
+            if os.path.exists(COUNTER_FILE):
+                try:
+                    with open(COUNTER_FILE, "r") as f:
+                        saved = json.load(f)
+                    if saved.get("year") == year:
+                        counter = saved
+                except (json.JSONDecodeError, IOError):
+                    pass
+            counter["year"] = year
+            counter["last_number"] += 1
+            tmp = COUNTER_FILE + ".tmp"
+            with open(tmp, "w") as f:
+                json.dump(counter, f)
+            os.replace(tmp, COUNTER_FILE)
+        finally:
+            try:
+                if use_fcntl:
+                    fcntl.flock(lock_fp.fileno(), fcntl.LOCK_UN)
+            except OSError:
+                pass
     return f"RE-{year}-{counter['last_number']:04d}"
 
 
@@ -392,29 +473,14 @@ class InvoiceRequest(BaseModel):
     bank_name: Optional[str] = None
     # Bitcoin aktivieren
     enable_btc: bool = False
-
-
-def get_image_base64(path, max_height=None):
-    if os.path.exists(path):
-        mime_type = "image/svg+xml" if path.endswith(".svg") else "image/png"
-        if max_height and not path.endswith(".svg"):
-            try:
-                from PIL import Image
-                img = Image.open(path)
-                if img.height > max_height:
-                    ratio = max_height / img.height
-                    new_width = int(img.width * ratio)
-                    img = img.resize((new_width, max_height), Image.LANCZOS)
-                buf = io.BytesIO()
-                img.save(buf, format="PNG")
-                b64 = base64.b64encode(buf.getvalue()).decode()
-                return f"data:image/png;base64,{b64}"
-            except Exception:
-                pass
-        with open(path, "rb") as image_file:
-            b64 = base64.b64encode(image_file.read()).decode()
-            return f"data:{mime_type};base64,{b64}"
-    return None
+    doc_type: str = "rechnung"
+    buyer_reference: Optional[str] = None
+    time_entry_ids: List[int] = []
+    payment_days: int = 14
+    discount_days: int = 0
+    discount_percent: float = 0.0
+    invoice_date: Optional[str] = None
+    preview: bool = False
 
 
 def get_logo_path():
@@ -430,82 +496,38 @@ def get_logo_path():
     return None
 
 
+from .pdf_utils import get_image_base64 as _get_image_base64
+from .pdf_utils import generate_qr_base64 as _generate_qr_base64
+from .pdf_utils import generate_girocode_data as _generate_girocode_data
+from . import bitcoin as btcmod
+
+
+def get_image_base64(path, max_height=None):
+    return _get_image_base64(path, max_height)
+
+
 def generate_qr_base64(data: str):
-    qr = qrcode.QRCode(version=1, box_size=10, border=2)
-    qr.add_data(data)
-    qr.make(fit=True)
-    img = qr.make_image(fill_color="black", back_color="white")
-    buffered = io.BytesIO()
-    img.save(buffered, format="PNG")
-    return f"data:image/png;base64,{base64.b64encode(buffered.getvalue()).decode()}"
+    return _generate_qr_base64(data)
 
 
 def generate_girocode_data(name: str, iban: str, bic: str, amount: float, purpose: str):
-    iban_clean = iban.replace(" ", "")
-    lines = ["BCD", "002", "1", "SCT", bic, name, iban_clean, f"EUR{amount:.2f}", "", "", purpose, ""]
-    return "\n".join(lines)
+    return _generate_girocode_data(name, iban, bic, amount, purpose)
 
 
 def get_btc_price_eur():
-    try:
-        url = "https://api.kraken.com/0/public/Ticker?pair=XBTEUR"
-        response = requests.get(url, timeout=5)
-        data = response.json()
-        price = float(data["result"]["XXBTZEUR"]["c"][0])
-        return price
-    except Exception as e:
-        print(f"Kurs-Fehler: {e}")
-        return 62500.0
+    return btcmod.get_btc_price_eur()
 
-
-# ---------------------------------------------------------------------------
-# Bitcoin – Adressen-Ableitung & Zahlungsprüfung
-# ---------------------------------------------------------------------------
 
 def derive_btc_address(xpub: str, index: int) -> str:
-    """Leitet eine BIP-84 Native SegWit Adresse aus zpub + index ab.
-    zpub ist bereits auf Account-Ebene, daher direkt Change + AddressIndex."""
-    if not Bip84:
-        raise RuntimeError("bip-utils nicht installiert (pip install bip-utils)")
-    bip84_ctx = Bip84.FromExtendedKey(xpub, Bip84Coins.BITCOIN)
-    addr_ctx = bip84_ctx.Change(Bip44Changes.CHAIN_EXT).AddressIndex(index)
-    return addr_ctx.PublicKey().ToAddress()
+    return btcmod.derive_btc_address(xpub, index)
 
 
 def get_next_btc_address() -> Optional[str]:
-    """Gibt die nächste einzigartige BTC-Adresse zurück (aus xpub).
-    Falls keine xpub konfiguriert ist, wird None zurückgegeben."""
-    settings = bk.get_settings()
-    xpub = settings.get("btc_xpub")
-    if not xpub:
-        return None
-    index = settings.get("btc_address_index", 0)
-    address = derive_btc_address(xpub, index)
-    # Index für nächste Rechnung hochzählen
-    settings["btc_address_index"] = index + 1
-    bk.save_settings(settings)
-    return address
+    return btcmod.get_next_btc_address(bk)
 
 
 def check_btc_payment(address: str) -> dict:
-    """Prüft via Blockstream API ob Zahlung auf Adresse eingegangen ist.
-    Returns: {"received": bool, "btc_amount": float, "txid": str|None, "sats": int}"""
-    try:
-        url = f"https://blockstream.info/api/address/{address}/utxo"
-        response = requests.get(url, timeout=10)
-        utxos = response.json()
-        total_sats = sum(u.get("value", 0) for u in utxos)
-        total_btc = total_sats / 100_000_000
-        txid = utxos[0].get("txid") if utxos else None
-        return {
-            "received": total_btc > 0,
-            "btc_amount": total_btc,
-            "txid": txid,
-            "sats": total_sats,
-        }
-    except Exception as e:
-        print(f"Blockstream API Fehler: {e}")
-        return {"received": False, "btc_amount": 0, "txid": None, "sats": 0}
+    return btcmod.check_btc_payment(address)
 
 
 # ---------------------------------------------------------------------------
@@ -530,7 +552,548 @@ async def form_page(request: Request):
         "business_type": business_type,
         "has_iban": bool(settings.get("bank_iban")),
         "has_btc": bool(settings.get("btc_xpub")),
+        "next_invoice_no": bk.peek_next_invoice_number(),
+        "customers": bk.get_all_customers(),
+        "drafts": bk.list_drafts(),
+        "default_payment_days": settings.get("default_payment_days", 14),
     })
+
+
+@app.get("/api/customers")
+async def api_customers(q: str = ""):
+    return bk.search_customers(q)
+
+
+@app.get("/customers")
+async def customers_page(request: Request):
+    return templates.TemplateResponse("customers.html", {
+        "request": request,
+        "active_page": "customers",
+        "customers": bk.get_all_customers(),
+    })
+
+
+@app.post("/customers")
+async def customers_create(
+    request: Request,
+    name: str = Form(...),
+    address: str = Form(""),
+    leitweg_id: str = Form(""),
+):
+    bk.upsert_customer(name, address, leitweg_id)
+    return Response(status_code=302, headers={"Location": "/customers"})
+
+
+@app.post("/customers/{customer_id}/delete")
+async def customers_delete(customer_id: int):
+    bk.delete_customer(customer_id)
+    return Response(status_code=302, headers={"Location": "/customers"})
+
+
+@app.post("/drafts/save")
+async def drafts_save(request: Request):
+    form = await request.form()
+    import json as _json
+    raw = form.get("data", "{}")
+    try:
+        data = _json.loads(raw)
+    except Exception:
+        data = {}
+    did = bk.save_draft(data)
+    return {"id": did}
+
+
+@app.post("/drafts/{draft_id}/delete")
+async def drafts_delete(draft_id: int):
+    bk.delete_draft(draft_id)
+    return Response(status_code=302, headers={"Location": "/invoice"})
+
+
+@app.get("/api/next-invoice-no")
+async def api_next_invoice_no():
+    return {"next": bk.peek_next_invoice_number()}
+
+
+# ---------------------------------------------------------------------------
+# Endpoints – Angebote & Zeiterfassung
+# ---------------------------------------------------------------------------
+
+@app.get("/quotes")
+async def quotes_page(request: Request):
+    return templates.TemplateResponse("quotes.html", {
+        "request": request, "active_page": "quotes",
+        "quotes": bk.get_all_quotes(),
+        "next_no": bk.peek_next_quote_number(),
+        "customers": bk.get_all_customers(),
+        "today": datetime.date.today().isoformat(),
+    })
+
+
+@app.post("/quotes")
+async def quotes_create(request: Request):
+    form = await request.form()
+    import json as _json
+    try:
+        items = _json.loads(form.get("items_json", "[]"))
+    except Exception:
+        items = []
+    if not items:
+        items = [{"description": (form.get("item_desc") or "").strip(), "quantity": 1,
+                  "unit_price": float((form.get("item_price") or "0").replace(",", ".") or 0), "vat_rate": 0}]
+    valid_days = int(form.get("valid_days") or 30)
+    qdate = form.get("quote_date") or datetime.date.today().isoformat()
+    try:
+        valid_until = (datetime.date.fromisoformat(qdate) + datetime.timedelta(days=valid_days)).isoformat()
+    except ValueError:
+        valid_until = qdate
+    bk.save_quote({
+        "customer_name": (form.get("customer_name") or "").strip(),
+        "customer_address": form.get("customer_address", ""),
+        "items": items, "date": qdate, "valid_until": valid_until,
+        "valid_days": valid_days, "status": "offen", "notes": form.get("notes", ""),
+    })
+    try:
+        bk.upsert_customer(form.get("customer_name", ""), form.get("customer_address", ""))
+    except Exception:
+        pass
+    return Response(status_code=302, headers={"Location": "/quotes"})
+
+
+@app.post("/quotes/{quote_id}/status")
+async def quotes_status(quote_id: str, status: str = Form(...)):
+    if status not in ("offen", "angenommen", "abgelehnt"):
+        raise HTTPException(status_code=400, detail="Ungültiger Status")
+    bk.set_quote_status(quote_id, status)
+    return Response(status_code=302, headers={"Location": "/quotes"})
+
+
+@app.get("/quotes/{quote_id}/pdf")
+async def quotes_pdf(quote_id: str):
+    q = bk.get_quote(quote_id)
+    if not q:
+        raise HTTPException(status_code=404, detail="Angebot nicht gefunden")
+    biz = get_business_info()
+    total = sum(float(i.get("quantity", 0)) * float(i.get("unit_price", 0)) for i in q.get("items", []))
+    html_out = env.get_template("angebot.html").render(
+        studio_name=biz["name"], studio_address=biz["address"],
+        studio_phone=biz["phone"], studio_email=biz["email"],
+        customer_name=q.get("customer_name"), customer_address=q.get("customer_address"),
+        items=q.get("items", []), total_gross=total,
+        quote_number=q["id"], quote_date=q.get("date", ""),
+        valid_until=q.get("valid_until", ""))
+    pdf_buffer = io.BytesIO()
+    if pisa:
+        result = pisa.CreatePDF(io.BytesIO(html_out.encode("utf-8")), dest=pdf_buffer)
+        if result.err:
+            raise HTTPException(status_code=500, detail="PDF-Generierung fehlgeschlagen")
+    else:
+        raise HTTPException(status_code=500, detail="xhtml2pdf nicht installiert")
+    return Response(content=pdf_buffer.getvalue(), media_type="application/pdf",
+                    headers={"Content-Disposition": f"inline; filename=Angebot_{quote_id}.pdf"})
+
+
+@app.post("/quotes/{quote_id}/convert")
+async def quotes_convert(quote_id: str, request: Request):
+    from . import invoicing as invmod
+    q = bk.get_quote(quote_id)
+    if not q:
+        raise HTTPException(status_code=404, detail="Angebot nicht gefunden")
+    settings = bk.get_settings()
+    biz = get_business_info()
+    btc_rate = get_btc_price_eur()
+    business_type = settings.get("business_type", "kleinunternehmer")
+    pro = is_pro_license()
+    if not pro:
+        business_type = "kleinunternehmer"
+    logo_path = get_logo_path()
+    result = invmod.create_invoice(
+        {"customer_name": q.get("customer_name"), "customer_address": q.get("customer_address"),
+         "items": q.get("items", []), "enable_btc": False,
+         "payment_days": settings.get("default_payment_days", 14)},
+        settings=settings, biz=biz, jinja_env=env, pdf_dir=PDF_DIR,
+        logo_paths={"custom": CUSTOM_LOGO_PATH if logo_path == CUSTOM_LOGO_PATH else logo_path,
+                    "default": LOGO_PATH, "btc_icon": BTC_ICON_PATH},
+        is_pro=pro, business_type=business_type, btc_rate=btc_rate,
+        number_provider=_get_next_invoice_number, peek_provider=bk.peek_next_invoice_number,
+        address_provider=get_next_btc_address, preview=False)
+    bk.set_quote_status(quote_id, "angenommen")
+    accept = request.headers.get("accept", "")
+    if "application/json" in accept:
+        return {"invoice": result["invoice_no"]}
+    return Response(status_code=302, headers={"Location": "/income"})
+
+
+@app.get("/zeiten")
+async def timelog_page(request: Request):
+    entries = bk.get_time_entries()
+    unbilled = sum(float(e.get("amount", 0)) for e in entries if not e.get("billed_invoice"))
+    return templates.TemplateResponse("timelog.html", {
+        "request": request, "active_page": "timelog",
+        "entries": entries[:200], "unbilled_total": unbilled,
+        "customers": bk.get_all_customers(),
+        "today": datetime.date.today().isoformat(),
+    })
+
+
+@app.post("/zeiten")
+async def timelog_add(request: Request, date: str = Form(...), customer_name: str = Form(...),
+                      description: str = Form(...), hours: str = Form(...), rate: str = Form(...)):
+    try:
+        h = float(hours.replace(",", "."))
+        r = float(rate.replace(",", "."))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Stunden/Satz ungültig")
+    if h <= 0 or r < 0:
+        raise HTTPException(status_code=400, detail="Stunden müssen > 0 sein")
+    bk.add_time_entry(date, customer_name, description, h, r)
+    return Response(status_code=302, headers={"Location": "/zeiten"})
+
+
+@app.post("/zeiten/{row_id}/delete")
+async def timelog_delete(row_id: int):
+    bk.delete_time_entry(row_id)
+    return Response(status_code=302, headers={"Location": "/zeiten"})
+
+
+@app.get("/api/timelog/unbilled")
+async def api_timelog_unbilled(customer: str = ""):
+    entries = bk.get_time_entries(unbilled_only=True)
+    if customer:
+        entries = [e for e in entries if e.get("customer_name") == customer]
+    return entries
+
+
+@app.get("/anlagen")
+async def assets_page(request: Request, year: Optional[int] = None):
+    year = year or datetime.date.today().year
+    return templates.TemplateResponse("assets.html", {
+        "request": request, "active_page": "assets", "year": year,
+        "assets": bk.get_assets(), "afa_rows": bk.afa_for_year(year),
+        "afa_total": bk.afa_total(year), "gwg_limit": bk.GWG_LIMIT,
+        "years": _get_available_years(), "today": datetime.date.today().isoformat(),
+    })
+
+
+@app.post("/anlagen")
+async def assets_add(request: Request, name: str = Form(...), purchase_date: str = Form(...),
+                     cost: str = Form(...), years: str = Form("3")):
+    try:
+        c = float(cost.replace(",", "."))
+        y = int(years)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Kosten/Dauer ungültig")
+    if c <= 0 or y < 1 or y > 50:
+        raise HTTPException(status_code=400, detail="Kosten müssen > 0, Dauer 1–50 Jahre sein")
+    bk.add_asset(name, purchase_date, c, y)
+    return Response(status_code=302, headers={"Location": "/anlagen"})
+
+
+@app.post("/anlagen/{row_id}/delete")
+async def assets_delete(row_id: int):
+    bk.delete_asset(row_id)
+    return Response(status_code=302, headers={"Location": "/anlagen"})
+
+
+def _recurring_create_fn(payload: dict) -> dict:
+    from . import invoicing as invmod
+    settings = bk.get_settings()
+    biz = get_business_info()
+    btc_rate = get_btc_price_eur()
+    business_type = settings.get("business_type", "kleinunternehmer")
+    pro = is_pro_license()
+    if not pro:
+        business_type = "kleinunternehmer"
+    logo_path = get_logo_path()
+    return invmod.create_invoice(
+        payload, settings=settings, biz=biz, jinja_env=env, pdf_dir=PDF_DIR,
+        logo_paths={"custom": CUSTOM_LOGO_PATH if logo_path == CUSTOM_LOGO_PATH else logo_path,
+                    "default": LOGO_PATH, "btc_icon": BTC_ICON_PATH},
+        is_pro=pro, business_type=business_type, btc_rate=btc_rate,
+        number_provider=_get_next_invoice_number, peek_provider=bk.peek_next_invoice_number,
+        address_provider=get_next_btc_address, preview=False,
+    )
+
+
+@app.get("/recurring")
+async def recurring_page(request: Request, ran: Optional[int] = None, created: str = ""):
+    created_list = [c for c in created.split(",") if c] if ran else None
+    return templates.TemplateResponse("recurring.html", {
+        "request": request, "active_page": "recurring",
+        "profiles": bk.get_recurring_profiles(),
+        "customers": bk.get_all_customers(),
+        "today": datetime.date.today().isoformat(),
+        "run_result": created_list,
+    })
+
+
+@app.post("/recurring")
+async def recurring_create(request: Request):
+    form = await request.form()
+    import json as _json
+    items_raw = form.get("items_json", "[]")
+    try:
+        items = _json.loads(items_raw)
+    except Exception:
+        items = [{"description": form.get("item_desc", ""), "quantity": 1,
+                  "unit_price": float((form.get("item_price", "0") or "0").replace(",", "."))}]
+    data = {
+        "name": form.get("name", ""),
+        "customer_name": form.get("customer_name", ""),
+        "customer_address": form.get("customer_address", ""),
+        "items": items,
+        "frequency": form.get("frequency", "monthly"),
+        "next_run": form.get("next_run") or datetime.date.today().isoformat(),
+        "payment_days": int(form.get("payment_days") or 14),
+        "enable_btc": form.get("enable_btc") == "1",
+        "doc_type": "rechnung",
+        "active": True,
+    }
+    bk.save_recurring_profile(data)
+    return Response(status_code=302, headers={"Location": "/recurring"})
+
+
+@app.post("/recurring/{row_id}/toggle")
+async def recurring_toggle(row_id: int):
+    p = bk.get_recurring_profile(row_id)
+    if p:
+        p["active"] = not p.get("active", True)
+        bk.save_recurring_profile({k: v for k, v in p.items() if not k.startswith("_")}, row_id)
+    return Response(status_code=302, headers={"Location": "/recurring"})
+
+
+@app.post("/recurring/{row_id}/delete")
+async def recurring_delete(row_id: int):
+    bk.delete_recurring_profile(row_id)
+    return Response(status_code=302, headers={"Location": "/recurring"})
+
+
+@app.post("/recurring/run")
+async def recurring_run(request: Request):
+    created = bk.run_due_recurring(_recurring_create_fn)
+    accept = request.headers.get("accept", "")
+    if "application/json" in accept:
+        return {"created": created}
+    import urllib.parse
+    q = urllib.parse.urlencode({"ran": 1, "created": ",".join(created)})
+    return Response(status_code=302, headers={"Location": f"/recurring?{q}"})
+
+
+@app.post("/income/{invoice_id}/remind")
+async def remind_invoice(invoice_id: str):
+    inv = bk.get_invoice_by_id(invoice_id)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Rechnung nicht gefunden")
+    settings = bk.get_settings()
+    level = int(inv.get("dunning_level", 0)) + 1
+    if level > 3:
+        level = 3
+    fee = float(settings.get(f"dunning_fee_{level}", 5.0))
+    updated = bk.apply_dunning(invoice_id, level, fee)
+    if not updated:
+        raise HTTPException(status_code=400, detail="Mahnung nicht möglich")
+    return Response(status_code=302, headers={"Location": "/income"})
+
+
+@app.get("/income/{invoice_id}/mahnung")
+async def mahnung_pdf(invoice_id: str):
+    inv = bk.get_invoice_by_id(invoice_id)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Rechnung nicht gefunden")
+    import datetime as _dt
+    settings = bk.get_settings()
+    biz = get_business_info()
+    level = max(1, int(inv.get("dunning_level", 1)))
+    titles = {1: "Zahlungserinnerung", 2: "1. Mahnung", 3: "2. Mahnung (letzte Mahnung)"}
+    fee_total = float(inv.get("dunning_fees", 0))
+    rate = float(settings.get("default_interest_rate", 8.62))
+    due = inv.get("due_date") or inv.get("date")
+    try:
+        days = max(0, (_dt.date.today() - _dt.date.fromisoformat(due[:10])).days)
+    except (ValueError, TypeError):
+        days = 0
+    interest = round(float(inv.get("amount", 0)) * rate / 100 / 365 * days, 2) if days > 0 else 0.0
+    total = round(float(inv.get("amount", 0)) + fee_total + interest, 2)
+    new_due = (_dt.date.today() + _dt.timedelta(days=7)).strftime("%d.%m.%Y")
+    try:
+        due_fmt = _dt.date.fromisoformat(due[:10]).strftime("%d.%m.%Y")
+    except (ValueError, TypeError):
+        due_fmt = due
+    html_out = env.get_template("mahnung.html").render(
+        studio_name=biz["name"], studio_address=biz["address"],
+        invoice=inv, level=level, level_title=titles.get(level, "Mahnung"),
+        fee=fee_total, interest=interest, interest_rate=rate, days=days, total=total,
+        due=due_fmt, new_due=new_due,
+        iban=settings.get("bank_iban", ""), bic=settings.get("bank_bic", ""))
+    pdf_buffer = io.BytesIO()
+    if pisa:
+        result = pisa.CreatePDF(io.BytesIO(html_out.encode("utf-8")), dest=pdf_buffer)
+        if result.err:
+            raise HTTPException(status_code=500, detail="PDF-Generierung fehlgeschlagen")
+    else:
+        raise HTTPException(status_code=500, detail="xhtml2pdf nicht installiert")
+    return Response(content=pdf_buffer.getvalue(), media_type="application/pdf",
+                    headers={"Content-Disposition": f"inline; filename=Mahnung_{invoice_id}.pdf"})
+
+
+@app.post("/webhook/btcpay")
+async def webhook_btcpay(request: Request):
+    """BTCPay Server Webhook: markiert Rechnung bei InvoiceSettled automatisch bezahlt.
+    Inaktiv ohne btcpay_webhook_secret (Einstellungen oder BTCPAY_WEBHOOK_SECRET)."""
+    import hmac as _hmac
+    import hashlib as _hl
+    settings = bk.get_settings()
+    secret = settings.get("btcpay_webhook_secret") or os.environ.get("BTCPAY_WEBHOOK_SECRET", "")
+    if not secret:
+        raise HTTPException(status_code=404, detail="BTCPay nicht konfiguriert")
+    raw = await request.body()
+    sig = request.headers.get("BTCPay-Sig", "")
+    expected = "sha256=" + _hmac.new(secret.encode(), raw, _hl.sha256).hexdigest()
+    if not _hmac.compare_digest(sig, expected):
+        raise HTTPException(status_code=401, detail="Ungültige Signatur")
+    try:
+        event = json.loads(raw.decode("utf-8"))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Ungültiges JSON")
+    etype = event.get("type", "")
+    if etype not in ("InvoiceSettled", "InvoicePaymentSettled", "InvoicePaid"):
+        return {"ok": True, "ignored": etype}
+    meta = event.get("metadata") or {}
+    order_id = meta.get("orderId") or event.get("orderId") or ""
+    inv = bk.get_invoice_by_id(order_id) if order_id else None
+    if not inv:
+        return {"ok": False, "error": "Rechnung nicht gefunden"}
+    payment = event.get("payment") or {}
+    btc_val = payment.get("value") or event.get("amountPaid")
+    try:
+        btc_amount = float(btc_val) if btc_val else None
+    except (ValueError, TypeError):
+        btc_amount = None
+    bk.mark_invoice_paid(order_id, datetime.date.today().isoformat(),
+                         btc_received=btc_amount, txid=event.get("invoiceId"),
+                         payment_method="bitcoin")
+    return {"ok": True, "invoice": order_id}
+
+
+@app.get("/api/btcpay/status")
+async def btcpay_status():
+    settings = bk.get_settings()
+    url = settings.get("btcpay_url") or os.environ.get("BTCPAY_SERVER_URL", "")
+    secret = settings.get("btcpay_webhook_secret") or os.environ.get("BTCPAY_WEBHOOK_SECRET", "")
+    return {"configured": bool(url and secret), "url": bool(url), "webhook": bool(secret)}
+
+
+def _require_pro(request: Request, feature_name: str):
+    if not is_pro_license():
+        return templates.TemplateResponse("upsell.html", {
+            "request": request, "active_page": "",
+            "feature_name": feature_name,
+        }, status_code=403)
+    return None
+
+
+@app.get("/bank")
+async def bank_page(request: Request):
+    gated = _require_pro(request, "Bankimport & Abgleich")
+    if gated is not None:
+        return gated
+    return templates.TemplateResponse("bank.html", {
+        "request": request, "active_page": "bank",
+        "transactions": sorted(bk.get_bank_transactions(), key=lambda t: t.get("date", ""), reverse=True)[:200],
+        "invoices": [i for i in bk.get_active_invoices() if not i.get("payment_received")],
+    })
+
+
+@app.post("/bank/import")
+async def bank_import(request: Request, file: UploadFile = File(...)):
+    gated = _require_pro(request, "Bankimport & Abgleich")
+    if gated is not None:
+        return gated
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Datei zu groß (max. 5 MB).")
+    name = (file.filename or "").lower()
+    if name.endswith(".xml"):
+        from .bankimport import parse_camt053
+        rows = parse_camt053(contents)
+    else:
+        from .bankimport import parse_csv
+        rows = parse_csv(contents)
+    n = bk.import_bank_transactions(rows)
+    m = bk.auto_match_bank()
+    return Response(status_code=302, headers={"Location": f"/bank?imported={n}&matched={m}"})
+
+
+@app.post("/bank/{row_id}/match")
+async def bank_match(request: Request, row_id: int, invoice_id: str = Form(""), action: str = Form("match")):
+    gated = _require_pro(request, "Bankimport & Abgleich")
+    if gated is not None:
+        return gated
+    if action == "mark_paid" and invoice_id:
+        bk.mark_invoice_paid(invoice_id, datetime.date.today().isoformat(), payment_method="bank_transfer")
+        bk.set_bank_tx_match(row_id, invoice_id, "verbucht")
+    elif action == "unmatch":
+        bk.set_bank_tx_match(row_id, None, "offen")
+    else:
+        bk.set_bank_tx_match(row_id, invoice_id or None, "zugeordnet" if invoice_id else "offen")
+    return Response(status_code=302, headers={"Location": "/bank"})
+
+
+@app.get("/kassenbuch")
+async def cashbook_page(request: Request, year: Optional[int] = None):
+    gated = _require_pro(request, "Kassenbuch")
+    if gated is not None:
+        return gated
+    year = year or datetime.date.today().year
+    entries = [e for e in bk.get_cashbook_entries() if (e.get("date") or "").startswith(str(year))]
+    balance = sum(float(e.get("amount", 0)) for e in entries)
+    return templates.TemplateResponse("cashbook.html", {
+        "request": request, "active_page": "cashbook", "year": year,
+        "entries": entries, "balance": balance,
+        "years": _get_available_years(), "today": datetime.date.today().isoformat(),
+    })
+
+
+@app.get("/gobd/export")
+async def gobd_export(year: Optional[int] = None):
+    import io as _io
+    import zipfile as _zf
+    year = year or datetime.date.today().year
+    buf = _io.BytesIO()
+    with _zf.ZipFile(buf, "w", _zf.ZIP_DEFLATED) as z:
+        for inv in bk.get_active_invoices():
+            if (inv.get("date") or "").startswith(str(year)):
+                p = os.path.join(PDF_DIR, f"{inv['id']}.pdf")
+                if os.path.exists(p):
+                    z.write(p, arcname=f"belege/{inv['id']}.pdf")
+        if os.path.isdir(RECEIPTS_DIR):
+            for fn in sorted(os.listdir(RECEIPTS_DIR)):
+                z.write(os.path.join(RECEIPTS_DIR, fn), arcname=f"belege/ausgaben/{fn}")
+        euer = bk.generate_euer(year)
+        z.writestr(f"euer/EUER_{year}.json", json.dumps(euer, ensure_ascii=False, indent=2))
+        z.writestr(f"audit/audit_{year}.json",
+                   json.dumps(bk.get_audit_log(), ensure_ascii=False, indent=2))
+        settings = bk.get_settings()
+        biz = get_business_info()
+        doku = env.get_template("verfahrensdoku.html").render(
+            business_name=biz["name"], business_address=biz["address"],
+            year=year, today=datetime.date.today().strftime("%d.%m.%Y"),
+            version="1.0", tax_id=settings.get("tax_id", ""))
+        z.writestr("verfahrensdokumentation.html", doku)
+        z.writestr("README.txt",
+                   f"GoBD-Export {year}\nErstellt: {datetime.date.today()}\n"
+                   "Inhalt: belege/, euer/, audit/, Verfahrensdokumentation.\n"
+                   "Hinweis: kein Ersatz für Steuerberatung.\n")
+    buf.seek(0)
+    return Response(content=buf.getvalue(), media_type="application/zip",
+                    headers={"Content-Disposition": f"attachment; filename=GoBD_{year}.zip"})
+
+
+@app.get("/api/drafts/{draft_id}")
+async def api_draft(draft_id: int):
+    for d in bk.list_drafts():
+        if d.get("_draft_id") == draft_id:
+            return d
+    raise HTTPException(status_code=404, detail="Entwurf nicht gefunden")
 
 
 @app.get("/health")
@@ -540,192 +1103,53 @@ async def health():
 
 @app.post("/generate-pdf")
 async def generate_pdf(request: InvoiceRequest):
+    from . import invoicing as invmod
     try:
         settings = bk.get_settings()
         biz = get_business_info()
         btc_rate = get_btc_price_eur()
         business_type = settings.get("business_type", "kleinunternehmer")
-
-        # MwSt-Berechnung (nur mit Pro-Lizenz)
-        if business_type == "regulaer" and is_pro_license():
-            # unit_price ist Netto, MwSt wird berechnet
-            total_net = sum(item.quantity * item.unit_price for item in request.items)
-            total_vat = sum(item.quantity * item.unit_price * item.vat_rate for item in request.items)
-            total_gross = total_net + total_vat
-            is_kleinunternehmer = False
-        else:
-            # Kleinunternehmer: unit_price ist Brutto, keine MwSt
-            total_net = sum(item.quantity * item.unit_price for item in request.items)
-            total_vat = 0
-            total_gross = total_net
-            is_kleinunternehmer = True
-
-        total_btc = total_gross / btc_rate
-        invoice_no = _get_next_invoice_number()
-
-        # Bankdaten aus Settings
-        iban = request.iban or settings.get("bank_iban", "")
-        bic = request.bic or settings.get("bank_bic", "")
-        bank_name = request.bank_name or settings.get("bank_name", "")
-
-        # Bankverbindung prüfen (nur wenn kein Bitcoin aktiviert)
-        if not iban and not request.enable_btc:
-            raise HTTPException(
-                status_code=400,
-                detail="Keine Bankverbindung hinterlegt. Bitte IBAN und BIC in den Einstellungen eintragen."
-            )
-
-        # QR Codes
-        # Zahlungsseiten-QR (Haupt-QR)
-        pay_url = f"https://btcrechnung.de/pay/{invoice_no}"
-        pay_qr = generate_qr_base64(pay_url)
-
-        # BTC-Adresse: xpub-basiert (unique pro Rechnung) oder manuell
-        btc_address = None
-        btc_qr = None
-        btc_discount_percent = settings.get("btc_discount_percent", 0)
-        lightning_address = settings.get("lightning_address")
-        if request.enable_btc:
-            try:
-                btc_address = get_next_btc_address() or request.btc_address
-                if btc_address:
-                    # Rabatt/Aufschlag berechnen
-                    if btc_discount_percent != 0:
-                        discount_factor = 1 - (btc_discount_percent / 100)
-                        total_btc = (total_gross * discount_factor) / btc_rate
-                    
-                    btc_uri = f"bitcoin:{btc_address}?amount={total_btc:.8f}"
-                    if lightning_address:
-                        btc_uri += f"&lightning={lightning_address}"
-                    btc_qr = generate_qr_base64(btc_uri)
-            except Exception as e:
-                print(f"BTC address generation failed: {e}")
-                btc_address = None
-
-        # GiroCode für SEPA
-        account_name = settings.get("bank_account_name") or biz["name"]
-        giro_data = generate_girocode_data(account_name, iban, bic, total_gross, f"Rechnung {invoice_no}")
-        bank_qr = generate_qr_base64(giro_data) if iban else None
-
-        # Logos
-        logo_path = get_logo_path()
-        logo_data = get_image_base64(logo_path, max_height=80) if logo_path else None
-        btc_icon_data = get_image_base64(BTC_ICON_PATH, max_height=20)
-
-        # HTML zu PDF
-        template = env.get_template('invoice.html')
-        html_out = template.render(
-            studio_name=biz["name"],
-            slogan=biz["slogan"],
-            studio_address=biz["address"],
-            studio_phone=biz["phone"],
-            studio_email=biz["email"],
-            customer_name=request.customer_name,
-            customer_address=request.customer_address,
-            items=request.items,
-            total_gross=total_gross,
-            total_btc=total_btc,
-            btc_rate=btc_rate,
-            btc_address=btc_address,
-            btc_discount_percent=btc_discount_percent,
-            lightning_address=settings.get("lightning_address"),
-            iban=iban,
-            bic=bic,
-            bank_name=bank_name,
-            bank_account_name=settings.get("bank_account_name"),
-            qr_code=btc_qr,
-            bank_qr=bank_qr,
-            pay_qr=pay_qr,
-            pay_url=pay_url,
-            logo_data=logo_data,
-            btc_icon_data=btc_icon_data,
-            is_kleinunternehmer=is_kleinunternehmer,
-            total_net=total_net,
-            total_vat=total_vat,
-            invoice_date=datetime.date.today().strftime("%d.%m.%Y"),
-            invoice_number=invoice_no,
-            tax_id=settings.get("tax_id", ""),
-            business_type=business_type
-        )
-
-        pdf_buffer = io.BytesIO()
-        if pisa:
-            result = pisa.CreatePDF(io.BytesIO(html_out.encode("utf-8")), dest=pdf_buffer)
-            if result.err:
-                raise HTTPException(status_code=500, detail="PDF-Generierung fehlgeschlagen")
-        else:
-            raise HTTPException(status_code=500, detail="xhtml2pdf nicht installiert")
-
-        pdf_content = pdf_buffer.getvalue()
-
-        # ZUGFeRD XML generieren
-        line_items_xml = [
-            {
-                "description": item.description,
-                "quantity": item.quantity,
-                "unit_price": item.unit_price,
-                "line_total": item.quantity * item.unit_price,
-            }
-            for item in request.items
-        ]
-        zugferd_xml = generate_zugferd_xml(
-            invoice_number=invoice_no,
-            issue_date=datetime.date.today(),
-            seller_name=biz["name"],
-            seller_address=biz["address"],
-            buyer_name=request.customer_name,
-            buyer_address=request.customer_address,
-            line_items=line_items_xml,
-            total_eur=total_gross,
-            iban=request.iban,
-            is_kleinunternehmer=is_kleinunternehmer,
-            seller_tax_id=bk.get_settings().get("tax_id", ""),
-        )
-
-        # ZUGFeRD in PDF einbetten (inkl. XMP-Metadaten & PDF/A-3)
-        if facturx:
-            try:
-                pdf_content = facturx.generate_facturx_from_binary(
-                    pdf_content,
-                    zugferd_xml,
-                    facturx_level='basic',
-                    check_xsd=False,
-                )
-            except Exception as fe:
-                print(f"ZUGFeRD Fehler: {fe}")
-                import traceback
-                traceback.print_exc()
-
-        # PDF auf Festplatte speichern
-        pdf_save_path = os.path.join(PDF_DIR, f"{invoice_no}.pdf")
-        try:
-            with open(pdf_save_path, "wb") as f:
-                f.write(pdf_content)
-        except Exception as e:
-            print(f"PDF speichern fehlgeschlagen: {e}")
-
-        # Invoice in Buchhaltung loggen
-        bk.log_invoice({
-            "id": invoice_no,
-            "date": datetime.date.today().isoformat(),
+        if not is_pro_license():
+            business_type = "kleinunternehmer"
+        payload = {
             "customer_name": request.customer_name,
             "customer_address": request.customer_address,
-            "amount": total_gross,
-            "items_description": ", ".join(f"{item.description} ({item.quantity}x)" for item in request.items),
-            "payment_received": False,
-            "payment_date": None,
-            "invoice_filename": f"Rechnung_{invoice_no}.pdf",
-            "btc_rate_at_creation": btc_rate,
-            "btc_amount": total_btc,
-            "btc_address": btc_address,
-        })
-
+            "items": [{"description": i.description, "quantity": i.quantity,
+                       "unit_price": i.unit_price, "vat_rate": i.vat_rate} for i in request.items],
+            "enable_btc": request.enable_btc,
+            "btc_address": request.btc_address,
+            "iban": request.iban, "bic": request.bic, "bank_name": request.bank_name,
+            "doc_type": request.doc_type, "payment_days": request.payment_days,
+            "discount_days": request.discount_days, "discount_percent": request.discount_percent,
+            "invoice_date": request.invoice_date,
+            "buyer_reference": request.buyer_reference,
+        }
+        logo_path = get_logo_path()
+        result = invmod.create_invoice(
+            payload, settings=settings, biz=biz, jinja_env=env, pdf_dir=PDF_DIR,
+            logo_paths={"custom": CUSTOM_LOGO_PATH if logo_path == CUSTOM_LOGO_PATH else logo_path,
+                        "default": LOGO_PATH, "btc_icon": BTC_ICON_PATH},
+            is_pro=is_pro_license(), business_type=business_type, btc_rate=btc_rate,
+            number_provider=_get_next_invoice_number, peek_provider=bk.peek_next_invoice_number,
+            address_provider=get_next_btc_address, preview=bool(request.preview),
+        )
+        invoice_no = result["invoice_no"]
+        pdf_content = result["pdf"]
+        if result.get("preview"):
+            return Response(content=pdf_content, media_type="application/pdf",
+                            headers={"Content-Disposition": f"inline; filename=Vorschau_{invoice_no}.pdf"})
+        if request.time_entry_ids:
+            try:
+                bk.mark_time_billed(list(request.time_entry_ids), invoice_no)
+            except Exception as e:
+                print(f"Zeiten markieren fehlgeschlagen: {e}")
         return Response(
             content=pdf_content,
             media_type="application/pdf",
             headers={"Content-Disposition": f"attachment; filename=Rechnung_{invoice_no}.pdf"}
         )
-
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         import traceback
         print(traceback.format_exc())
@@ -820,9 +1244,17 @@ async def pay_api(invoice_id: str):
 async def dashboard_page(request: Request, year: Optional[int] = None, month: Optional[int] = None):
     year = year or datetime.date.today().year
     month = month or (datetime.date.today().month if year == datetime.date.today().year else 1)
+    try:
+        created_recurring = bk.run_due_recurring(_recurring_create_fn)
+    except Exception as e:
+        print(f"Recurring-Lauf fehlgeschlagen: {e}")
+        created_recurring = []
     summary = bk.get_monthly_summary(year, month)
     yearly = bk.get_yearly_summary(year)
     transactions = bk.get_recent_transactions(limit=10)
+    overdue = bk.overdue_invoices()
+    open_quotes = [q for q in bk.get_all_quotes() if q.get("status") == "offen"]
+    unbilled_total = sum(float(e.get("amount", 0)) for e in bk.get_time_entries(unbilled_only=True))
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "active_page": "dashboard",
@@ -834,6 +1266,11 @@ async def dashboard_page(request: Request, year: Optional[int] = None, month: Op
         "transactions": transactions,
         "month_names": MONTH_NAMES,
         "years": _get_available_years(),
+        "created_recurring": created_recurring,
+        "overdue": overdue,
+        "overdue_count": len(overdue),
+        "open_quotes": open_quotes,
+        "unbilled_total": unbilled_total,
     })
 
 
@@ -852,8 +1289,15 @@ async def expenses_page(request: Request, year: Optional[int] = None, month: Opt
         filtered = [e for e in filtered if e["date"].startswith(f"{year}-{month:02d}")]
 
     # Enrich with labels
+    receipt_names = set()
+    try:
+        if os.path.isdir(RECEIPTS_DIR):
+            receipt_names = {os.path.splitext(f)[0] for f in os.listdir(RECEIPTS_DIR)}
+    except OSError:
+        pass
     for e in filtered:
         e["category_label"] = CATEGORY_LABELS.get(e["category"], e["category"])
+        e["has_receipt"] = e.get("id") in receipt_names
 
     total = sum(e["amount"] for e in filtered if e.get("status", "aktiv") != "storniert")
 
@@ -882,6 +1326,7 @@ async def create_expense(
     payment_method: str = Form("bank_transfer"),
     vat_rate: Optional[str] = Form(None),
     notes: str = Form(""),
+    receipt: UploadFile = File(None),
 ):
     # Komma zu Punkt konvertieren (deutsche Eingabe)
     amount_float = float(amount.replace(",", "."))
@@ -902,8 +1347,38 @@ async def create_expense(
         "payment_method": payment_method,
         "notes": notes or None,
     }
-    bk.create_expense(data)
+    created = bk.create_expense(data)
+    if receipt and receipt.filename:
+        contents = await receipt.read()
+        if contents and len(contents) <= 5 * 1024 * 1024:
+            ext = os.path.splitext(receipt.filename or "")[1].lower()[:5] or ".jpg"
+            if ext not in (".jpg", ".jpeg", ".png", ".pdf", ".webp"):
+                ext = ".jpg"
+            os.makedirs(RECEIPTS_DIR, exist_ok=True)
+            with open(os.path.join(RECEIPTS_DIR, f"{created['id']}{ext}"), "wb") as f:
+                f.write(contents)
     return Response(status_code=302, headers={"Location": "/expenses"})
+
+
+@app.post("/expenses/ocr")
+async def expenses_ocr(file: UploadFile = File(...)):
+    from . import ocr as ocrmod
+    contents = await file.read()
+    if not contents or len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Datei leer oder zu groß (max. 5 MB).")
+    res = ocrmod.scan(contents)
+    res["ocr_available"] = ocrmod.is_available()
+    return res
+
+
+@app.get("/expenses/{expense_id}/receipt")
+async def expense_receipt(expense_id: str):
+    for ext in (".jpg", ".jpeg", ".png", ".pdf", ".webp"):
+        p = os.path.join(RECEIPTS_DIR, f"{expense_id}{ext}")
+        if os.path.exists(p):
+            from starlette.responses import FileResponse
+            return FileResponse(p)
+    raise HTTPException(status_code=404, detail="Kein Beleg vorhanden")
 
 
 @app.post("/expenses/{expense_id}/cancel")
@@ -917,7 +1392,8 @@ async def cancel_expense(expense_id: str):
 # ---------------------------------------------------------------------------
 
 @app.get("/income")
-async def income_page(request: Request, year: Optional[int] = None, month: Optional[int] = None):
+async def income_page(request: Request, year: Optional[int] = None, month: Optional[int] = None,
+                      highlight: str = ""):
     year = year or datetime.date.today().year
     all_invoices = bk.get_all_invoices()
 
@@ -926,6 +1402,8 @@ async def income_page(request: Request, year: Optional[int] = None, month: Optio
         filtered = [i for i in filtered if i["date"].startswith(f"{year}-{month:02d}")]
 
     total = sum(i["amount"] for i in filtered if i.get("status", "aktiv") != "storniert")
+    settings = bk.get_settings()
+    overdue_ids = {i["id"] for i in bk.overdue_invoices()}
 
     return templates.TemplateResponse("income.html", {
         "request": request,
@@ -937,6 +1415,9 @@ async def income_page(request: Request, year: Optional[int] = None, month: Optio
         "month_names": MONTH_NAMES,
         "years": _get_available_years(),
         "payment_methods": PAYMENT_METHOD_LABELS,
+        "overdue_ids": overdue_ids,
+        "interest_rate": settings.get("default_interest_rate", 8.62),
+        "highlight": highlight,
     })
 
 
@@ -953,13 +1434,17 @@ async def add_income_page(request: Request):
 @app.post("/income/add")
 async def add_income(
     date: str = Form(...),
-    amount: float = Form(...),
+    amount: str = Form(...),
     customer_name: str = Form(...),
     items_description: str = Form(...),
     payment_received: str = Form("false"),
     payment_date: str = Form(""),
     payment_method: str = Form("bank_transfer"),
 ):
+    try:
+        amount_float = float(amount.replace(",", "."))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Ungültiger Betrag.")
     invoice_no = _get_next_invoice_number()
     
     invoice_data = {
@@ -967,7 +1452,7 @@ async def add_income(
         "date": date,
         "customer_name": customer_name,
         "customer_address": "",
-        "amount": amount,
+        "amount": amount_float,
         "items_description": items_description,
         "payment_received": payment_received == "true",
         "invoice_filename": None,
@@ -1285,18 +1770,27 @@ async def datev_export(year: Optional[int] = None):
                 "Betrag", "Buchungstext", "Beleglink"])
 
     beleg_nr = 1
-    # Einnahmen
+    # Einnahmen (Gutschriften mit umgekehrten Konten)
     for inv in sorted(invoices, key=lambda x: x["date"]):
+        is_credit = inv.get("doc_type") == "gutschrift" or inv["id"].startswith("GS-")
         w.writerow([
             beleg_nr,
             inv["date"],
-            "1200",  # Forderungen (Soll)
-            "8400",  # Erlöse (Haben)
+            "8400" if is_credit else "1200",
+            "1200" if is_credit else "8400",
             f"{inv['amount']:.2f}".replace(".", ","),
-            f"Rechnung {inv['id']}",
+            f"{'Gutschrift' if is_credit else 'Rechnung'} {inv['id']}",
             "",
         ])
         beleg_nr += 1
+        if float(inv.get("dunning_fees", 0) or 0) > 0:
+            w.writerow([
+                beleg_nr, inv.get("last_reminder") or inv["date"],
+                "1200", "8600",
+                f"{float(inv['dunning_fees']):.2f}".replace(".", ","),
+                f"Mahngebühren {inv['id']}", "",
+            ])
+            beleg_nr += 1
 
     # Ausgaben
     for exp in sorted(expenses, key=lambda x: x["date"]):
@@ -1356,6 +1850,14 @@ async def settings_save(
     logo: UploadFile = File(None),
     delete_logo: str = Form(""),
     logo_hidden: Optional[str] = Form(None),
+    xrechnung_profile: str = Form("basic"),
+    btcpay_url: str = Form(""),
+    btcpay_webhook_secret: str = Form(""),
+    default_payment_days: str = Form("14"),
+    dunning_fee_1: str = Form("5"),
+    dunning_fee_2: str = Form("7.5"),
+    dunning_fee_3: str = Form("10"),
+    default_interest_rate: str = Form("8.62"),
 ):
     settings = bk.get_settings()
     settings["business_name"] = business_name.strip()
@@ -1379,7 +1881,21 @@ async def settings_save(
     except ValueError:
         settings["btc_discount_percent"] = 0
     settings["lightning_address"] = lightning_address.strip() or None
+    settings["xrechnung_profile"] = xrechnung_profile if xrechnung_profile in ("basic", "en16931") else "basic"
+    settings["btcpay_url"] = btcpay_url.strip()
+    if btcpay_webhook_secret.strip():
+        settings["btcpay_webhook_secret"] = btcpay_webhook_secret.strip()
     settings["logo_hidden"] = logo_hidden == "1"
+    try:
+        settings["default_payment_days"] = max(0, min(90, int(default_payment_days or 14)))
+    except ValueError:
+        settings["default_payment_days"] = 14
+    for _k, _v in (("dunning_fee_1", dunning_fee_1), ("dunning_fee_2", dunning_fee_2),
+                   ("dunning_fee_3", dunning_fee_3), ("default_interest_rate", default_interest_rate)):
+        try:
+            settings[_k] = max(0.0, float((_v or "0").replace(",", ".")))
+        except ValueError:
+            pass
 
     message = "Einstellungen gespeichert."
 
@@ -1391,13 +1907,29 @@ async def settings_save(
     # Logo hochladen
     if logo and logo.filename:
         contents = await logo.read()
+        allowed_ext = (".png", ".jpg", ".jpeg")
+        fname = (logo.filename or "").lower()
+        ctype = (logo.content_type or "").lower()
         if len(contents) > 2 * 1024 * 1024:  # Max 2 MB
             message = "Logo zu groß (max. 2 MB)."
-        else:
+        elif not fname.endswith(allowed_ext) or (ctype and ctype not in ("image/png", "image/jpeg")):
+            message = "Nur PNG/JPG erlaubt."
+        elif contents[:8:2] == b'\x89PNG\r\n\x1a\n'[::2] or contents[:2] == b'\xff\xd8':
             os.makedirs(os.path.dirname(CUSTOM_LOGO_PATH), exist_ok=True)
             with open(CUSTOM_LOGO_PATH, "wb") as f:
                 f.write(contents)
             message = "Einstellungen gespeichert. Logo hochgeladen."
+        else:
+            try:
+                from PIL import Image
+                import io as _io
+                Image.open(_io.BytesIO(contents)).verify()
+                os.makedirs(os.path.dirname(CUSTOM_LOGO_PATH), exist_ok=True)
+                with open(CUSTOM_LOGO_PATH, "wb") as f:
+                    f.write(contents)
+                message = "Einstellungen gespeichert. Logo hochgeladen."
+            except Exception:
+                message = "Ungültige Bilddatei."
 
     bk.save_settings(settings)
     settings["has_custom_logo"] = os.path.exists(CUSTOM_LOGO_PATH)
@@ -1455,8 +1987,8 @@ async def settings_password(request: Request):
     error_msg = None
     if not _verify_password(current, settings.get("password_hash", "")):
         error_msg = "Aktuelles Passwort ist falsch."
-    elif len(new_pw) < 4:
-        error_msg = "Neues Passwort muss mindestens 4 Zeichen lang sein."
+    elif len(new_pw) < 8:
+        error_msg = "Neues Passwort muss mindestens 8 Zeichen lang sein."
     elif new_pw != new_pw_confirm:
         error_msg = "Neue Passwörter stimmen nicht überein."
     else:

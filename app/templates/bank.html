@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Bankimport{% endblock %}
+{% block content %}
+<div class="page-header-row">
+    <h1>Bankimport &amp; Abgleich</h1>
+</div>
+<div class="card">
+    <h2>Import (CSV oder CAMT.053 XML, max. 5 MB)</h2>
+    <form method="POST" action="/bank/import" enctype="multipart/form-data">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <div class="form-row">
+            <div class="field">
+                <label>Datei</label>
+                <input type="file" name="file" accept=".csv,.xml" required>
+                <p class="hint">CSV: Spalten Datum, Betrag, Verwendungszweck (Trennzeichen auto). XML: CAMT.053.</p>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Importieren &amp; abgleichen</button>
+    </form>
+</div>
+<div class="card">
+    <h2>Buchungen ({{ transactions|length }})</h2>
+    {% if transactions %}
+    <div class="table-wrap">
+    <table>
+        <tr><th>Datum</th><th>Zweck</th><th style="text-align:right;">Betrag</th><th>Status</th><th>Rechnung</th><th></th></tr>
+        {% for t in transactions %}
+        <tr>
+            <td>{{ t.date }}</td>
+            <td style="max-width: 320px; overflow: hidden; text-overflow: ellipsis;">{{ t.purpose }}</td>
+            <td style="text-align: right;" class="{% if t.amount >= 0 %}positive{% else %}negative{% endif %}">{{ "%.2f"|format(t.amount)|replace(".", ",") }} €</td>
+            <td>{{ t.status }}</td>
+            <td>{{ t.matched_invoice or '–' }}</td>
+            <td style="white-space: nowrap;">
+                {% if not t.matched_invoice %}
+                <form method="POST" action="/bank/{{ t._row_id }}/match" style="display:inline">
+                    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                    <select name="invoice_id" style="min-width: 140px;">
+                        <option value="">– wählen –</option>
+                        {% for inv in invoices %}<option value="{{ inv.id }}">{{ inv.id }} ({{ "%.2f"|format(inv.amount)|replace(".", ",") }} €)</option>{% endfor %}
+                    </select>
+                    <button type="submit" name="action" value="match" class="btn btn-secondary btn-sm">Zuordnen</button>
+                </form>
+                {% elif t.status != 'verbucht' %}
+                <form method="POST" action="/bank/{{ t._row_id }}/match" style="display:inline">
+                    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                    <input type="hidden" name="invoice_id" value="{{ t.matched_invoice }}">
+                    <button type="submit" name="action" value="mark_paid" class="btn btn-primary btn-sm">Als bezahlt buchen</button>
+                </form>
+                {% else %}
+                <span class="badge badge-paid">verbucht</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+    </div>
+    {% else %}
+    <div class="no-data">Noch keine Bankbuchungen importiert.</div>
+    {% endif %}
+</div>
+{% endblock %}

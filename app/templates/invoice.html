@@ -75,9 +75,12 @@
                 {{ customer_address }}
             </td>
             <td style="width: 50%; text-align: right;">
-                <div class="invoice-title">RECHNUNG</div>
+                <div class="invoice-title">{% if doc_type is defined and doc_type == 'gutschrift' %}GUTSCHRIFT{% else %}RECHNUNG{% endif %}</div>
                 Nummer: {{ invoice_number }}<br>
                 Datum: {{ invoice_date }}
+                {% if buyer_reference is defined and buyer_reference %}<br>Leitweg-ID: {{ buyer_reference }}{% endif %}
+                {% if due_date is defined and due_date %}<br>Zahlbar bis: {{ due_date }}{% endif %}
+                {% if discount_percent is defined and discount_percent and discount_days %}<br>{{ "%.2f"|format(discount_percent)|replace(".", ",") }}% Skonto bei Zahlung innerhalb von {{ discount_days }} Tagen{% endif %}
             </td>
         </tr>
     </table>
