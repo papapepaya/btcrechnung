@@ -102,6 +102,12 @@ class SimpleTemplates:
                 context["csrf_token"] = authmod.csrf_token_for_session(bk, tok) if tok else ""
             except Exception:
                 context["csrf_token"] = ""
+        if "purchase_url" not in context:
+            try:
+                context["purchase_url"] = os.environ.get("PURCHASE_URL") or bk.get_settings().get(
+                    "purchase_url", "https://buy.stripe.com/bJe5kw9TRdBd1gLbf628802")
+            except Exception:
+                context["purchase_url"] = "https://buy.stripe.com/bJe5kw9TRdBd1gLbf628802"
         html = self.env.get_template(name).render(**context)
         return HTMLResponse(html, status_code=status_code)
 
@@ -314,6 +320,10 @@ async def auth_middleware(request: Request, call_next):
         return Response(status_code=302, headers={"Location": "/login"})
     if request.method == "POST" and path not in CSRF_EXEMPT:
         try:
+            # body() ZUERST aufrufen: cached den Body, damit Downstream
+            # (Route) das Formular erneut lesen kann (Starlette replayt nur
+            # _body, nicht einen per stream() konsumierten Body).
+            await request.body()
             form = await request.form()
             provided = form.get("_csrf") or request.headers.get("x-csrf-token")
         except Exception:
@@ -1944,6 +1954,9 @@ async def settings_license(request: Request):
     settings = bk.get_settings()
     settings["license_email"] = email
     settings["license_key"] = key
+    purchase_url = (form.get("purchase_url", "") or "").strip()
+    if purchase_url:
+        settings["purchase_url"] = purchase_url
     bk.save_settings(settings)
 
     license_message = None

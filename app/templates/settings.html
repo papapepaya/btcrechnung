@@ -59,7 +59,7 @@
                 <input type="hidden" name="business_type" value="kleinunternehmer">
                 <p class="hint">
                     Reguläres Unternehmen erfordert eine Business-Lizenz.
-                    <a href="https://buy.stripe.com/bJe5kw9TRdBd1gLbf628802" style="color: var(--orange);">Business-Lizenz kaufen (89 €) &#8594;</a>
+                    <a href="{{ purchase_url }}" style="color: var(--orange);">Business-Lizenz kaufen (89 €) &#8594;</a>
                 </p>
                 {% endif %}
             </div>
@@ -243,7 +243,7 @@
     {% else %}
     <p style="font-size: 0.82rem; color: var(--gray-600); margin-bottom: 14px;">
         <span style="color: var(--orange);">Kleinunternehmer-Version</span> – MwSt und UStVA nicht verfügbar.
-        <a href="https://buy.stripe.com/bJe5kw9TRdBd1gLbf628802" style="color: var(--orange); font-weight: 600;">
+        <a href="{{ purchase_url }}" style="color: var(--orange); font-weight: 600;">
             Business-Lizenz kaufen (89 €) &#8594;
         </a>
     </p>
@@ -254,6 +254,13 @@
             <div class="field">
                 <label>E-Mail (Kauf-E-Mail)</label>
                 <input type="email" name="license_email" value="{{ settings.license_email or '' }}" placeholder="kunde@example.com">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="field">
+                <label>Kauf-Link (für den Kaufen-Button)</label>
+                <input type="url" name="purchase_url" value="{{ settings.purchase_url or '' }}" placeholder="https://buy.stripe.com/..." spellcheck="false" autocomplete="off">
+                <p class="hint">Oder per Umgebungsvariable PURCHASE_URL setzen.</p>
             </div>
         </div>
         <div class="form-row">
