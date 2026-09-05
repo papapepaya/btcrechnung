@@ -33,6 +33,39 @@ def test_validation():
     assert validate_invoice("en16931", "F", "A", "K", "A2", "DE1", "991-12345-12", 10) == []
 
 
+def _xsd_validate(xml: bytes, profile: str) -> bool:
+    import glob
+    import os
+    from lxml import etree
+    base = os.path.join(os.path.dirname(__file__), "..", ".venv", "lib")
+    cands = glob.glob(os.path.join(base, "python*/site-packages/facturx/xsd",
+                                   f"facturx-{profile}", f"FACTUR-X_{profile.upper()}.xsd"))
+    assert cands, f"kein XSD fuer {profile}"
+    schema = etree.XMLSchema(etree.parse(cands[0]))
+    raw = xml.encode("utf-8") if isinstance(xml, str) else xml
+    return schema.validate(etree.fromstring(raw))
+
+
+def test_xsd_basic_and_en16931():
+    assert _xsd_validate(_xml(), "basic")
+    assert _xsd_validate(_xml(profile="en16931", buyer_reference="991-12345-12"), "en16931")
+
+
+def test_kleinunternehmer_exempt():
+    xml = _xml()
+    assert "<ram:CategoryCode>E</ram:CategoryCode>" in xml
+    assert "§ 19 UStG" in xml
+
+
+def test_regulaer_vat_and_credit():
+    xml = _xml(is_kleinunternehmer=False,
+               vat_breakdown=[{"rate": 0.19, "net": 100.0}],
+               type_code="381")
+    assert "<ram:TypeCode>381</ram:TypeCode>" in xml
+    assert "<ram:RateApplicablePercent>19.00</ram:RateApplicablePercent>" in xml
+    assert "<ram:CalculatedAmount>19.00</ram:CalculatedAmount>" in xml
+
+
 def test_leitweg_persistence():
     from app import bookkeeping as bk
     from app import db

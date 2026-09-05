@@ -200,9 +200,16 @@ def create_invoice(
     line_items_xml = [
         {"description": plain(i, "description", ""), "quantity": float(plain(i, "quantity", 0)),
          "unit_price": float(plain(i, "unit_price", 0)),
+         "vat_rate": float(plain(i, "vat_rate", 0)),
          "line_total": float(plain(i, "quantity", 0)) * float(plain(i, "unit_price", 0))}
         for i in items
     ]
+    vat_breakdown = None
+    if not is_kleinunternehmer:
+        by_rate: dict[float, float] = {}
+        for li in line_items_xml:
+            by_rate[li["vat_rate"]] = by_rate.get(li["vat_rate"], 0.0) + li["line_total"]
+        vat_breakdown = [{"rate": r, "net": round(n, 2)} for r, n in sorted(by_rate.items())]
     zugferd_xml = generate_zugferd_xml(
         invoice_number=invoice_no, issue_date=inv_date,
         seller_name=biz["name"], seller_address=biz["address"],
@@ -211,6 +218,9 @@ def create_invoice(
         is_kleinunternehmer=is_kleinunternehmer,
         seller_tax_id=settings.get("tax_id", ""),
         profile=profile, buyer_reference=buyer_reference or None,
+        vat_breakdown=vat_breakdown,
+        type_code="381" if doc_type == "gutschrift" else "380",
+        total_net=total_net,
     )
     if facturx:
         try:

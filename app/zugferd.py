@@ -25,6 +25,9 @@ def generate_zugferd_xml(
     is_kleinunternehmer: bool = True,
     profile: str = "basic",
     buyer_reference: Optional[str] = None,
+    vat_breakdown: Optional[list] = None,
+    type_code: str = "380",
+    total_net: Optional[float] = None,
 ) -> bytes:
     ns = {
         "rsm": "urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100",
@@ -43,7 +46,19 @@ def generate_zugferd_xml(
         "CrossIndustryInvoice_100pD16B.xsd",
     )
 
-    vat_cat = "S"  # Standard rated (0% = kein USt-Ausweis für Kleinunternehmer)
+    if is_kleinunternehmer:
+        vat_groups = [{"rate": 0.0, "net": total_eur, "tax": 0.0,
+                       "category": "E", "reason": "Steuerfreie Umsätze gemäß § 19 UStG"}]
+    elif vat_breakdown:
+        vat_groups = []
+        for g in vat_breakdown:
+            rate = float(g.get("rate", 0))
+            net = float(g.get("net", 0))
+            vat_groups.append({"rate": rate, "net": net,
+                               "tax": round(net * rate, 2), "category": "S"})
+    else:
+        vat_groups = [{"rate": 0.0, "net": total_eur, "tax": 0.0, "category": "S"}]
+
 
     # --- ExchangedDocumentContext ---
     ctx = SubElement(root, f"{{{ns['rsm']}}}ExchangedDocumentContext")
@@ -56,7 +71,7 @@ def generate_zugferd_xml(
     # --- ExchangedDocument ---
     doc = SubElement(root, f"{{{ns['rsm']}}}ExchangedDocument")
     SubElement(doc, f"{{{ns['ram']}}}ID").text = invoice_number
-    SubElement(doc, f"{{{ns['ram']}}}TypeCode").text = "380"
+    SubElement(doc, f"{{{ns['ram']}}}TypeCode").text = type_code if type_code in ("380", "381") else "380"
 
 
 
@@ -90,8 +105,12 @@ def generate_zugferd_xml(
         line_settle = SubElement(line, f"{{{ns['ram']}}}SpecifiedLineTradeSettlement")
         line_tax = SubElement(line_settle, f"{{{ns['ram']}}}ApplicableTradeTax")
         SubElement(line_tax, f"{{{ns['ram']}}}TypeCode").text = "VAT"
-        SubElement(line_tax, f"{{{ns['ram']}}}CategoryCode").text = vat_cat
-        SubElement(line_tax, f"{{{ns['ram']}}}RateApplicablePercent").text = "0.00"
+        item_rate = float(item.get("vat_rate", 0) or 0)
+        item_cat = "E" if is_kleinunternehmer else ("S" if item_rate > 0 else "E")
+        if item_cat == "E" and is_kleinunternehmer:
+            SubElement(line_tax, f"{{{ns['ram']}}}ExemptionReason").text = "Steuerfreie Umsätze gemäß § 19 UStG"
+        SubElement(line_tax, f"{{{ns['ram']}}}CategoryCode").text = item_cat
+        SubElement(line_tax, f"{{{ns['ram']}}}RateApplicablePercent").text = f"{item_rate * 100:.2f}"
 
         line_sum = SubElement(line_settle, f"{{{ns['ram']}}}SpecifiedTradeSettlementLineMonetarySummation")
         SubElement(line_sum, f"{{{ns['ram']}}}LineTotalAmount").text = f"{Decimal(str(item['line_total'])):.2f}"
@@ -142,20 +161,26 @@ def generate_zugferd_xml(
         payee = SubElement(pm, f"{{{ns['ram']}}}PayeePartyCreditorFinancialAccount")
         SubElement(payee, f"{{{ns['ram']}}}IBANID").text = iban.replace(" ", "")
 
-    # Trade tax
-    tax_subtotal = SubElement(settlement, f"{{{ns['ram']}}}ApplicableTradeTax")
-    SubElement(tax_subtotal, f"{{{ns['ram']}}}CalculatedAmount").text = f"{Decimal('0.00'):.2f}"
-    SubElement(tax_subtotal, f"{{{ns['ram']}}}TypeCode").text = "VAT"
-    SubElement(tax_subtotal, f"{{{ns['ram']}}}BasisAmount").text = f"{Decimal(str(total_eur)):.2f}"
-    SubElement(tax_subtotal, f"{{{ns['ram']}}}CategoryCode").text = vat_cat
-    SubElement(tax_subtotal, f"{{{ns['ram']}}}RateApplicablePercent").text = "0.00"
+    # Trade tax (je Steuersatz ein Block)
+    tax_total = 0.0
+    for g in vat_groups:
+        tax_subtotal = SubElement(settlement, f"{{{ns['ram']}}}ApplicableTradeTax")
+        SubElement(tax_subtotal, f"{{{ns['ram']}}}CalculatedAmount").text = f"{Decimal(str(g['tax'])):.2f}"
+        SubElement(tax_subtotal, f"{{{ns['ram']}}}TypeCode").text = "VAT"
+        if g.get("reason"):
+            SubElement(tax_subtotal, f"{{{ns['ram']}}}ExemptionReason").text = g["reason"]
+        SubElement(tax_subtotal, f"{{{ns['ram']}}}BasisAmount").text = f"{Decimal(str(g['net'])):.2f}"
+        SubElement(tax_subtotal, f"{{{ns['ram']}}}CategoryCode").text = g["category"]
+        SubElement(tax_subtotal, f"{{{ns['ram']}}}RateApplicablePercent").text = f"{g['rate'] * 100:.2f}"
+        tax_total += g["tax"]
     # Monetary summation
+    net_total = total_net if total_net is not None else (total_eur - tax_total)
     summation = SubElement(settlement, f"{{{ns['ram']}}}SpecifiedTradeSettlementHeaderMonetarySummation")
-    SubElement(summation, f"{{{ns['ram']}}}LineTotalAmount").text = f"{Decimal(str(total_eur)):.2f}"
+    SubElement(summation, f"{{{ns['ram']}}}LineTotalAmount").text = f"{Decimal(str(round(net_total, 2))):.2f}"
     SubElement(summation, f"{{{ns['ram']}}}ChargeTotalAmount").text = "0.00"
     SubElement(summation, f"{{{ns['ram']}}}AllowanceTotalAmount").text = "0.00"
-    SubElement(summation, f"{{{ns['ram']}}}TaxBasisTotalAmount").text = f"{Decimal(str(total_eur)):.2f}"
-    SubElement(summation, f"{{{ns['ram']}}}TaxTotalAmount").text = f"{Decimal('0.00'):.2f}"
+    SubElement(summation, f"{{{ns['ram']}}}TaxBasisTotalAmount").text = f"{Decimal(str(round(net_total, 2))):.2f}"
+    SubElement(summation, f"{{{ns['ram']}}}TaxTotalAmount").text = f"{Decimal(str(round(tax_total, 2))):.2f}"
     SubElement(summation, f"{{{ns['ram']}}}GrandTotalAmount").text = f"{Decimal(str(total_eur)):.2f}"
     SubElement(summation, f"{{{ns['ram']}}}DuePayableAmount").text = f"{Decimal(str(total_eur)):.2f}"
 
