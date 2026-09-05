@@ -6,7 +6,7 @@ Damit BTCRechnung automatisch eine **eindeutige Bitcoin-Adresse pro Rechnung** v
 
 ## Was ist ein xpub/zpub?
 
-- **xpub/zpub** = Öfflicher Schlüssel, aus dem unendlich viele Bitcoin-Adressen abgeleitet werden können
+- **xpub/zpub** = Öffentlicher Schlüssel, aus dem unendlich viele Bitcoin-Adressen abgeleitet werden können
 - **zpub** = Version für Native SegWit (bc1q... Adressen) – empfohlen
 - Mit dem zpub kann BTCRechnung für jede Rechnung eine eigene Adresse generieren
 - Dein **Private Key** bleibt in deiner Wallet – BTCRechnung kann nur Adressen erstellen, **nicht** BTC ausgeben
@@ -44,18 +44,9 @@ Damit BTCRechnung automatisch eine **eindeutige Bitcoin-Adresse pro Rechnung** v
 
 ### Schritt 4: zpub in BTCRechnung eintragen
 
-1. Öffne die Datei `data/settings.json` im Projektordner
-2. Trage deinen zpub ein:
-
-```json
-{
-  "btc_xpub": "zpub6rF...",
-  "btc_address_index": 0
-}
-```
-
-3. Speichere die Datei
-4. Starte BTCRechnung neu
+1. Öffne BTCRechnung → **Einstellungen → Bitcoin**
+2. Füge deinen zpub im Feld **xpub** ein
+3. **Speichern** – fertig, kein Neustart nötig
 
 ---
 
@@ -75,7 +66,7 @@ Damit BTCRechnung automatisch eine **eindeutige Bitcoin-Adresse pro Rechnung** v
 
 1. **Wallet → Information**
 2. Dort steht **"Master Public Key"** (beginnt mit `zpub` oder `ypub`)
-3. Kopieren und in `data/settings.json` eintragen
+3. Kopieren und in BTCRechnung unter **Einstellungen → Bitcoin** eintragen
 
 ---
 
@@ -110,8 +101,17 @@ Hardware-Wallets sind die sicherste Option. Alle unterstützen zpub-Export:
 2. Der Kunde scannt den QR-Code und wird auf die Zahlungsseite weitergeleitet
 3. Dort sieht er den aktuellen BTC-Betrag und die Adresse
 4. Er zahlt – das Geld geht **direkt in deine Wallet**
-5. BTCRechnung erkennt den Zahlungseingang automatisch (via Blockstream API)
-6. Die Rechnung wird als "Bezahlt" markiert mit exakten BTC/EUR-Werten
+5. Beim Öffnen der Zahlungsseite prüft BTCRechnung den Eingang (via Blockstream API) – danach markierst du die Rechnung mit einem Klick als bezahlt, mit exakten BTC/EUR-Werten
+6. Mit eigenem **BTCPay Server** (Einstellungen → BTCPay) geht das vollautomatisch per Webhook
+
+## Alternative: BTCPay Server
+
+Für vollautomatische Zahlungsbestätigung:
+
+1. Eigenen BTCPay Server betreiben (z.B. per Docker)
+2. In BTCRechnung unter **Einstellungen → BTCPay** URL und Webhook-Secret eintragen
+3. In BTCPay einen Webhook auf `https://deine-domain/webhook/btcpay` (Event `InvoiceSettled`) anlegen
+4. Bezahlte Rechnungen werden automatisch als bezahlt markiert
 
 ---
 

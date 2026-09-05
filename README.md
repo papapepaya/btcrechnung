@@ -42,6 +42,16 @@ chmod +x start.sh
 
 Browser: http://127.0.0.1:8000
 
+### Per Docker
+
+```bash
+git clone https://github.com/papapepaya/btcrechnung.git
+cd btcrechnung
+docker compose up --build
+```
+
+Browser: http://127.0.0.1:8000 – Daten liegen in `./data/` (inkl. SQLite-DB).
+
 ## Ersteinrichtung
 
 1. Passwort setzen (beim ersten Start)
