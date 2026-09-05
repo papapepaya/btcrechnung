@@ -8,7 +8,8 @@ def test_ocr_parse():
 def test_ocr_graceful():
     from app import ocr
     assert isinstance(ocr.is_available(), bool)
-    assert ocr.scan(b"nope")["available"] == ocr.is_available()
+    res = ocr.scan(b"nope")
+    assert res["available"] is False  # ungueltiges Bild -> graceful, nie Crash
 
 
 def test_ocr_real_image():
