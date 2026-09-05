@@ -42,8 +42,11 @@ def _xsd_validate(xml: bytes, profile: str) -> bool:
     from lxml import etree
     import facturx
     pkgdir = os.path.dirname(facturx.__file__)
-    cands = glob.glob(os.path.join(pkgdir, "xsd",
-                                   f"facturx-{profile}", f"FACTUR-X_{profile.upper()}.xsd"))
+    cands = []
+    for sub in ("xsd", "xsd_and_schematron"):
+        for main in (f"FACTUR-X_{profile.upper()}.xsd", f"Factur-X_{profile.upper()}.xsd",
+                     f"Factur-X_1.09_{profile.upper()}.xsd"):
+            cands += glob.glob(os.path.join(pkgdir, sub, f"facturx-{profile}", main))
     assert cands, f"kein XSD fuer {profile}"
     schema = etree.XMLSchema(etree.parse(cands[0]))
     raw = xml.encode("utf-8") if isinstance(xml, str) else xml

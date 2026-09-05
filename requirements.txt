@@ -5,7 +5,7 @@ python-dotenv>=1.0.1
 jinja2>=3.1.6
 xhtml2pdf>=0.2.16
 qrcode[pil]>=7.4.2
-factur-x>=1.10
+factur-x==1.10
 lxml>=6.0.0
 requests>=2.31.0
 python-multipart>=0.0.6
