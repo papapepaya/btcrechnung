@@ -465,6 +465,7 @@ class InvoiceRequest(BaseModel):
     # Bitcoin aktivieren
     enable_btc: bool = False
     doc_type: str = "rechnung"
+    time_entry_ids: List[int] = []
     payment_days: int = 14
     discount_days: int = 0
     discount_percent: float = 0.0
@@ -600,6 +601,155 @@ async def drafts_delete(draft_id: int):
 @app.get("/api/next-invoice-no")
 async def api_next_invoice_no():
     return {"next": bk.peek_next_invoice_number()}
+
+
+# ---------------------------------------------------------------------------
+# Endpoints – Angebote & Zeiterfassung
+# ---------------------------------------------------------------------------
+
+@app.get("/quotes")
+async def quotes_page(request: Request):
+    return templates.TemplateResponse("quotes.html", {
+        "request": request, "active_page": "quotes",
+        "quotes": bk.get_all_quotes(),
+        "next_no": bk.peek_next_quote_number(),
+        "customers": bk.get_all_customers(),
+        "today": datetime.date.today().isoformat(),
+    })
+
+
+@app.post("/quotes")
+async def quotes_create(request: Request):
+    form = await request.form()
+    import json as _json
+    try:
+        items = _json.loads(form.get("items_json", "[]"))
+    except Exception:
+        items = []
+    if not items:
+        items = [{"description": (form.get("item_desc") or "").strip(), "quantity": 1,
+                  "unit_price": float((form.get("item_price") or "0").replace(",", ".") or 0), "vat_rate": 0}]
+    valid_days = int(form.get("valid_days") or 30)
+    qdate = form.get("quote_date") or datetime.date.today().isoformat()
+    try:
+        valid_until = (datetime.date.fromisoformat(qdate) + datetime.timedelta(days=valid_days)).isoformat()
+    except ValueError:
+        valid_until = qdate
+    bk.save_quote({
+        "customer_name": (form.get("customer_name") or "").strip(),
+        "customer_address": form.get("customer_address", ""),
+        "items": items, "date": qdate, "valid_until": valid_until,
+        "valid_days": valid_days, "status": "offen", "notes": form.get("notes", ""),
+    })
+    try:
+        bk.upsert_customer(form.get("customer_name", ""), form.get("customer_address", ""))
+    except Exception:
+        pass
+    return Response(status_code=302, headers={"Location": "/quotes"})
+
+
+@app.post("/quotes/{quote_id}/status")
+async def quotes_status(quote_id: str, status: str = Form(...)):
+    if status not in ("offen", "angenommen", "abgelehnt"):
+        raise HTTPException(status_code=400, detail="Ungültiger Status")
+    bk.set_quote_status(quote_id, status)
+    return Response(status_code=302, headers={"Location": "/quotes"})
+
+
+@app.get("/quotes/{quote_id}/pdf")
+async def quotes_pdf(quote_id: str):
+    q = bk.get_quote(quote_id)
+    if not q:
+        raise HTTPException(status_code=404, detail="Angebot nicht gefunden")
+    biz = get_business_info()
+    total = sum(float(i.get("quantity", 0)) * float(i.get("unit_price", 0)) for i in q.get("items", []))
+    html_out = env.get_template("angebot.html").render(
+        studio_name=biz["name"], studio_address=biz["address"],
+        studio_phone=biz["phone"], studio_email=biz["email"],
+        customer_name=q.get("customer_name"), customer_address=q.get("customer_address"),
+        items=q.get("items", []), total_gross=total,
+        quote_number=q["id"], quote_date=q.get("date", ""),
+        valid_until=q.get("valid_until", ""))
+    pdf_buffer = io.BytesIO()
+    if pisa:
+        result = pisa.CreatePDF(io.BytesIO(html_out.encode("utf-8")), dest=pdf_buffer)
+        if result.err:
+            raise HTTPException(status_code=500, detail="PDF-Generierung fehlgeschlagen")
+    else:
+        raise HTTPException(status_code=500, detail="xhtml2pdf nicht installiert")
+    return Response(content=pdf_buffer.getvalue(), media_type="application/pdf",
+                    headers={"Content-Disposition": f"inline; filename=Angebot_{quote_id}.pdf"})
+
+
+@app.post("/quotes/{quote_id}/convert")
+async def quotes_convert(quote_id: str, request: Request):
+    from . import invoicing as invmod
+    q = bk.get_quote(quote_id)
+    if not q:
+        raise HTTPException(status_code=404, detail="Angebot nicht gefunden")
+    settings = bk.get_settings()
+    biz = get_business_info()
+    btc_rate = get_btc_price_eur()
+    business_type = settings.get("business_type", "kleinunternehmer")
+    pro = is_pro_license()
+    if not pro:
+        business_type = "kleinunternehmer"
+    logo_path = get_logo_path()
+    result = invmod.create_invoice(
+        {"customer_name": q.get("customer_name"), "customer_address": q.get("customer_address"),
+         "items": q.get("items", []), "enable_btc": False,
+         "payment_days": settings.get("default_payment_days", 14)},
+        settings=settings, biz=biz, jinja_env=env, pdf_dir=PDF_DIR,
+        logo_paths={"custom": CUSTOM_LOGO_PATH if logo_path == CUSTOM_LOGO_PATH else logo_path,
+                    "default": LOGO_PATH, "btc_icon": BTC_ICON_PATH},
+        is_pro=pro, business_type=business_type, btc_rate=btc_rate,
+        number_provider=_get_next_invoice_number, peek_provider=bk.peek_next_invoice_number,
+        address_provider=get_next_btc_address, preview=False)
+    bk.set_quote_status(quote_id, "angenommen")
+    accept = request.headers.get("accept", "")
+    if "application/json" in accept:
+        return {"invoice": result["invoice_no"]}
+    return Response(status_code=302, headers={"Location": "/income"})
+
+
+@app.get("/zeiten")
+async def timelog_page(request: Request):
+    entries = bk.get_time_entries()
+    unbilled = sum(float(e.get("amount", 0)) for e in entries if not e.get("billed_invoice"))
+    return templates.TemplateResponse("timelog.html", {
+        "request": request, "active_page": "timelog",
+        "entries": entries[:200], "unbilled_total": unbilled,
+        "customers": bk.get_all_customers(),
+        "today": datetime.date.today().isoformat(),
+    })
+
+
+@app.post("/zeiten")
+async def timelog_add(request: Request, date: str = Form(...), customer_name: str = Form(...),
+                      description: str = Form(...), hours: str = Form(...), rate: str = Form(...)):
+    try:
+        h = float(hours.replace(",", "."))
+        r = float(rate.replace(",", "."))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Stunden/Satz ungültig")
+    if h <= 0 or r < 0:
+        raise HTTPException(status_code=400, detail="Stunden müssen > 0 sein")
+    bk.add_time_entry(date, customer_name, description, h, r)
+    return Response(status_code=302, headers={"Location": "/zeiten"})
+
+
+@app.post("/zeiten/{row_id}/delete")
+async def timelog_delete(row_id: int):
+    bk.delete_time_entry(row_id)
+    return Response(status_code=302, headers={"Location": "/zeiten"})
+
+
+@app.get("/api/timelog/unbilled")
+async def api_timelog_unbilled(customer: str = ""):
+    entries = bk.get_time_entries(unbilled_only=True)
+    if customer:
+        entries = [e for e in entries if e.get("customer_name") == customer]
+    return entries
 
 
 def _recurring_create_fn(payload: dict) -> dict:
@@ -938,6 +1088,11 @@ async def generate_pdf(request: InvoiceRequest):
         if result.get("preview"):
             return Response(content=pdf_content, media_type="application/pdf",
                             headers={"Content-Disposition": f"inline; filename=Vorschau_{invoice_no}.pdf"})
+        if request.time_entry_ids:
+            try:
+                bk.mark_time_billed(list(request.time_entry_ids), invoice_no)
+            except Exception as e:
+                print(f"Zeiten markieren fehlgeschlagen: {e}")
         return Response(
             content=pdf_content,
             media_type="application/pdf",

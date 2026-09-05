@@ -1035,6 +1035,118 @@ def apply_dunning(invoice_id: str, level: int, fee: float) -> dict | None:
 
 
 # ---------------------------------------------------------------------------
+# Angebote & Zeiterfassung
+# ---------------------------------------------------------------------------
+
+def _quote_rows() -> list:
+    if _db_ready():
+        try:
+            from . import db as dbmod
+            con = dbmod.connect()
+            try:
+                dbmod.init_schema(con)
+                rows = con.execute("SELECT id, data FROM quotes ORDER BY id DESC").fetchall()
+                out = []
+                for rid, d in rows:
+                    try:
+                        out.append(json.loads(d))
+                    except Exception:
+                        continue
+                return out
+            finally:
+                con.close()
+        except Exception as e:
+            print(f"quotes DB-Fallback: {e}")
+    return []
+
+
+def peek_next_quote_number() -> str:
+    import datetime as _dt
+    year = _dt.date.today().year
+    nums = []
+    for q in _quote_rows():
+        if q.get("id", "").startswith(f"AN-{year}"):
+            try:
+                nums.append(int(q["id"].rsplit("-", 1)[-1]))
+            except ValueError:
+                pass
+    return f"AN-{year}-{max(nums, default=0) + 1:04d}"
+
+
+def save_quote(data: dict) -> dict:
+    import datetime as _dt
+    data = dict(data)
+    if not data.get("id"):
+        data["id"] = peek_next_quote_number()
+    data.setdefault("date", _dt.date.today().isoformat())
+    data.setdefault("status", "offen")
+    if _db_ready():
+        from . import db as dbmod
+        con = dbmod.connect()
+        try:
+            dbmod.init_schema(con)
+            with con:
+                con.execute("INSERT OR REPLACE INTO quotes (id, data) VALUES (?, ?)",
+                            (data["id"], json.dumps(data, ensure_ascii=False, default=str)))
+            return data
+        finally:
+            con.close()
+    return data
+
+
+def get_quote(quote_id: str) -> dict | None:
+    for q in _quote_rows():
+        if q.get("id") == quote_id:
+            return q
+    return None
+
+
+def get_all_quotes() -> list:
+    return _quote_rows()
+
+
+def set_quote_status(quote_id: str, status: str) -> dict | None:
+    q = get_quote(quote_id)
+    if not q:
+        return None
+    q["status"] = status
+    return save_quote(q)
+
+
+def get_time_entries(unbilled_only: bool = False) -> list:
+    entries = [e for e in _generic_all("timelog")]
+    entries.sort(key=lambda e: e.get("date", ""), reverse=True)
+    if unbilled_only:
+        entries = [e for e in entries if not e.get("billed_invoice")]
+    return entries
+
+
+def add_time_entry(date: str, customer_name: str, description: str, hours: float, rate: float) -> int:
+    return _generic_insert("timelog", {
+        "date": date, "customer_name": (customer_name or "").strip(),
+        "description": (description or "").strip(),
+        "hours": float(hours), "rate": float(rate),
+        "amount": round(float(hours) * float(rate), 2),
+        "billed_invoice": None,
+    })
+
+
+def delete_time_entry(row_id: int) -> bool:
+    return _generic_delete("timelog", row_id)
+
+
+def mark_time_billed(row_ids: list, invoice_id: str) -> int:
+    n = 0
+    for rid in row_ids:
+        e = _generic_get("timelog", int(rid))
+        if e and not e.get("billed_invoice"):
+            e["billed_invoice"] = invoice_id
+            if _generic_update("timelog", int(rid), {k: v for k, v in e.items() if not k.startswith("_")}):
+                n += 1
+    return n
+
+
+# ---------------------------------------------------------------------------
 # Calculations
 # ---------------------------------------------------------------------------
 

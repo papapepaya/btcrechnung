@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Zeiterfassung{% endblock %}
+{% block content %}
+<div class="page-header-row">
+    <h1>Zeiterfassung <span>· offen: {{ "%.2f"|format(unbilled_total)|replace(".", ",") }} €</span></h1>
+</div>
+<div class="card">
+    <h2>Zeit eintragen</h2>
+    <form method="POST" action="/zeiten">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <div class="form-row">
+            <div class="field" style="max-width: 160px;">
+                <label>Datum</label>
+                <input type="date" name="date" value="{{ today }}" required>
+            </div>
+            <div class="field">
+                <label>Kunde</label>
+                <input type="text" name="customer_name" required list="customerList" placeholder="Max Mustermann">
+                <datalist id="customerList">
+                    {% for c in customers or [] %}<option value="{{ c.name }}">{% endfor %}
+                </datalist>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="field">
+                <label>Tätigkeit</label>
+                <input type="text" name="description" required placeholder="z.B. Shooting + Nachbearbeitung">
+            </div>
+            <div class="field" style="max-width: 120px;">
+                <label>Stunden</label>
+                <input type="text" name="hours" required value="1" inputmode="decimal">
+            </div>
+            <div class="field" style="max-width: 140px;">
+                <label>Satz (€ / h)</label>
+                <input type="text" name="rate" required value="0" inputmode="decimal">
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Eintragen</button>
+    </form>
+</div>
+<div class="card">
+    <h2>Einträge ({{ entries|length }})</h2>
+    {% if entries %}
+    <div class="table-wrap">
+    <table>
+        <tr><th>Datum</th><th>Kunde</th><th>Tätigkeit</th><th style="text-align:right;">Std.</th><th style="text-align:right;">Betrag</th><th>Status</th><th></th></tr>
+        {% for e in entries %}
+        <tr>
+            <td>{{ e.date }}</td>
+            <td>{{ e.customer_name }}</td>
+            <td>{{ e.description }}</td>
+            <td style="text-align:right;">{{ e.hours }}</td>
+            <td style="text-align:right;">{{ "%.2f"|format(e.amount)|replace(".", ",") }} €</td>
+            <td>{% if e.billed_invoice %}<span class="badge badge-paid">{{ e.billed_invoice }}</span>{% else %}<span class="badge badge-unpaid">offen</span>{% endif %}</td>
+            <td>{% if not e.billed_invoice %}
+                <form method="POST" action="/zeiten/{{ e._row_id }}/delete" style="display:inline" onsubmit="return confirm('Eintrag löschen?')">
+                    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-sm btn-secondary">Löschen</button>
+                </form>{% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+    </div>
+    <p class="hint">Offene Zeiten pro Kunde lassen sich auf der Rechnungsseite per Knopfdruck als Positionen übernehmen.</p>
+    {% else %}
+    <div class="no-data">Noch keine Zeiten erfasst.</div>
+    {% endif %}
+</div>
+{% endblock %}

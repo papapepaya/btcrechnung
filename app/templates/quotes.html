@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Angebote{% endblock %}
+{% block content %}
+<div class="page-header-row">
+    <h1>Angebote <span>· Nr. {{ next_no }} (Vorschau)</span></h1>
+</div>
+<div class="card">
+    <h2>Neues Angebot (30 Tage gültig Standard)</h2>
+    <form method="POST" action="/quotes" id="quoteForm">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <div class="form-row">
+            <div class="field">
+                <label>Kunde</label>
+                <input type="text" name="customer_name" required list="customerList" placeholder="Max Mustermann">
+                <datalist id="customerList">
+                    {% for c in customers or [] %}<option value="{{ c.name }}">{% endfor %}
+                </datalist>
+            </div>
+            <div class="field" style="max-width: 150px;">
+                <label>Datum</label>
+                <input type="date" name="quote_date" value="{{ today }}">
+            </div>
+            <div class="field" style="max-width: 150px;">
+                <label>Gültig (Tage)</label>
+                <input type="number" name="valid_days" value="30" min="1" max="180">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="field">
+                <label>Adresse</label>
+                <textarea name="customer_address" placeholder="Musterstraße 1, 12345 Stadt"></textarea>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="field">
+                <label>Position</label>
+                <input type="text" name="item_desc" placeholder="Fotoshooting">
+            </div>
+            <div class="field" style="max-width: 140px;">
+                <label>Preis (€)</label>
+                <input type="text" name="item_price" value="0" inputmode="decimal">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="field">
+                <label>Notizen (optional)</label>
+                <input type="text" name="notes" placeholder="z.B. zzgl. Anfahrt">
+            </div>
+        </div>
+        <input type="hidden" name="items_json" id="quoteItemsJson">
+        <button type="submit" class="btn btn-primary">Angebot speichern</button>
+    </form>
+</div>
+<div class="card">
+    <h2>Alle Angebote ({{ quotes|length }})</h2>
+    {% if quotes %}
+    <div class="table-wrap">
+    <table>
+        <tr><th>Nr.</th><th>Datum</th><th>Kunde</th><th>Betrag</th><th>Status</th><th></th></tr>
+        {% for q in quotes %}
+        <tr>
+            <td style="font-weight:500;">{{ q.id }}</td>
+            <td>{{ q.date }}</td>
+            <td>{{ q.customer_name }}</td>
+            <td style="text-align:right;">{% set ns = namespace(t=0) %}{% for it in q.get('items') or [] %}{% set ns.t = ns.t + it.quantity * it.unit_price %}{% endfor %}{{ "%.2f"|format(ns.t)|replace(".", ",") }} €</td>
+            <td>
+                {% if q.status == 'angenommen' %}<span class="badge badge-paid">Angenommen</span>
+                {% elif q.status == 'abgelehnt' %}<span class="badge" style="background:#FFEBEE;color:#D32F2F;">Abgelehnt</span>
+                {% else %}<span class="badge badge-unpaid">Offen</span>{% endif %}
+            </td>
+            <td style="white-space:nowrap;text-align:right;">
+                <a href="/quotes/{{ q.id }}/pdf" class="btn btn-sm btn-secondary" target="_blank">PDF</a>
+                {% if q.status == 'offen' %}
+                <form method="POST" action="/quotes/{{ q.id }}/convert" style="display:inline">
+                    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-sm btn-primary">→ Rechnung</button>
+                </form>
+                <form method="POST" action="/quotes/{{ q.id }}/status" style="display:inline">
+                    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                    <input type="hidden" name="status" value="abgelehnt">
+                    <button type="submit" class="btn btn-sm btn-secondary">Ablehnen</button>
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+    </div>
+    {% else %}
+    <div class="no-data">Noch keine Angebote.</div>
+    {% endif %}
+</div>
+<script>
+document.getElementById('quoteForm').addEventListener('submit', function() {
+    var desc = this.querySelector('[name="item_desc"]').value || 'Leistung';
+    var price = (this.querySelector('[name="item_price"]').value || '0').replace(',', '.');
+    document.getElementById('quoteItemsJson').value = JSON.stringify([{description: desc, quantity: 1, unit_price: parseFloat(price) || 0, vat_rate: 0}]);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page { size: A4; margin: 55px 55px 60px 55px; }
+        body { font-family: 'Helvetica', sans-serif; color: #333; line-height: 1.4; font-size: 13px; }
+        .header-table { width: 100%; border-bottom: 2px solid #000; padding-bottom: 15px; }
+        .header-table td { padding: 0; vertical-align: middle; border: none; }
+        .studio-name { font-size: 20px; font-weight: bold; text-transform: uppercase; }
+        .invoice-header-table { width: 100%; margin-top: 30px; }
+        .invoice-header-table td { padding: 0; vertical-align: top; border: none; }
+        .invoice-title { font-size: 18px; font-weight: bold; margin-bottom: 5px; }
+        .items-table { width: 100%; border-collapse: collapse; margin-top: 30px; }
+        .items-table th { background-color: #f8f8f8; text-align: left; padding: 10px; border-bottom: 2px solid #000; }
+        .items-table td { padding: 10px; border-bottom: 1px solid #eee; }
+        .totals { margin-top: 20px; text-align: right; font-size: 16px; font-weight: bold; }
+        .validity { margin-top: 20px; font-size: 12px; background: #f8f8f8; padding: 10px 14px; }
+        .footer { position: fixed; bottom: 0; left: 0; right: 0; font-size: 9px; color: #aaa; text-align: center; border-top: 1px solid #eee; padding-top: 8px; }
+    </style>
+</head>
+<body>
+    <table class="header-table">
+        <tr>
+            <td style="width: 50%;"><div class="studio-name">{{ studio_name }}</div></td>
+            <td style="width: 50%; text-align: right; font-size: 10px; color: #555;">
+                {% if studio_address %}{{ studio_address }}<br>{% endif %}
+                {% if studio_phone %}{{ studio_phone }}{% endif %}{% if studio_phone and studio_email %} | {% endif %}{% if studio_email %}{{ studio_email }}{% endif %}
+            </td>
+        </tr>
+    </table>
+    <table class="invoice-header-table">
+        <tr>
+            <td style="width: 50%;">
+                <strong>Angebotsempfänger:</strong><br>
+                <div style="font-weight: bold; font-size: 14px; margin-top: 5px;">{{ customer_name }}</div>
+                {{ customer_address }}
+            </td>
+            <td style="width: 50%; text-align: right;">
+                <div class="invoice-title">ANGEBOT</div>
+                Nummer: {{ quote_number }}<br>
+                Datum: {{ quote_date }}<br>
+                Gültig bis: {{ valid_until }}
+            </td>
+        </tr>
+    </table>
+    <table class="items-table">
+        <thead><tr><th>Leistung</th><th>Menge</th><th>Einzelpreis</th><th style="text-align: right;">Gesamt</th></tr></thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ item.description }}</td>
+                <td>{{ item.quantity }}</td>
+                <td>{{ "%.2f"|format(item.unit_price)|replace(".", ",") }} &euro;</td>
+                <td style="text-align: right;">{{ "%.2f"|format(item.quantity * item.unit_price)|replace(".", ",") }} &euro;</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <div class="totals">Angebotssumme: {{ "%.2f"|format(total_gross)|replace(".", ",") }} &euro;</div>
+    <div class="validity">Dieses Angebot ist bis zum <strong>{{ valid_until }}</strong> gültig. Alle Preise inkl. MwSt (Kleinunternehmer § 19 UStG: keine MwSt ausgewiesen).</div>
+    <div class="footer">{{ studio_name }} · Unverbindliches Angebot, keine Rechnung · Erstellt mit btcrechnung.de</div>
+</body>
+</html>

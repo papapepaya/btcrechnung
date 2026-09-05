@@ -562,6 +562,8 @@
         <a href="/euer" {% if active_page == 'euer' %}class="active"{% endif %}>EÜR</a>
         {% if business_type == 'regulaer' and is_pro %}<a href="/ustva" {% if active_page == 'ustva' %}class="active"{% endif %}>UStVA</a>{% endif %}
         <a href="/invoice" {% if active_page == 'invoice' %}class="active"{% endif %}>Rechnung</a>
+        <a href="/quotes" {% if active_page == 'quotes' %}class="active"{% endif %}>Angebote</a>
+        <a href="/zeiten" {% if active_page == 'timelog' %}class="active"{% endif %}>Zeiten</a>
         <a href="/customers" {% if active_page == 'customers' %}class="active"{% endif %}>Kunden</a>
         <a href="/recurring" {% if active_page == 'recurring' %}class="active"{% endif %}>Abos</a>
         {% if is_pro %}<a href="/bank" {% if active_page == 'bank' %}class="active"{% endif %}>Bank</a>{% endif %}
