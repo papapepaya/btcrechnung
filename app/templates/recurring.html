@@ -14,7 +14,7 @@
     {% else %}Keine fälligen Abos – alles aktuell.{% endif %}
 </div>
 {% endif %}
-<div class="card">
+<div class="card" id="abo-form">
     <h2>Neues Abo</h2>
     <form method="POST" action="/recurring">
         <input type="hidden" name="_csrf" value="{{ csrf_token }}">
@@ -100,7 +100,7 @@
     </table>
     </div>
     {% else %}
-    <div class="no-data">Noch keine Abos. Erzeugung erfolgt automatisch bei Dashboard-Besuch (fällt kein Server-Dienst nötig).</div>
+    <div class="no-data">Noch keine Abos. <a href="#abo-form" style="color: var(--orange);">Erstes Abo anlegen</a> – fällige Rechnungen entstehen automatisch bei Dashboard-Besuch, ganz ohne Server-Dienst.</div>
     {% endif %}
 </div>
 <script>

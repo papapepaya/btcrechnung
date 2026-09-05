@@ -256,6 +256,7 @@
             </div>
             {% if lightning_address %}
             <div class="address-box" style="margin-top: 8px; color: #F7931A;">
+                <button class="copy-btn" id="copy-btn-ln">Kopieren</button>
                 Lightning: {{ lightning_address }}
             </div>
             {% endif %}
@@ -315,11 +316,12 @@
                 .catch(function(e) { console.warn('Refresh Fehler:', e); });
         }
 
-        // Kopieren-Button
-        var btn = document.getElementById('copy-btn');
-        if (btn) {
+        // Kopieren-Buttons
+        function wireCopy(id, text) {
+            var btn = document.getElementById(id);
+            if (!btn) return;
             btn.addEventListener('click', function() {
-                navigator.clipboard.writeText(btcAddress).then(function() {
+                navigator.clipboard.writeText(text).then(function() {
                     btn.textContent = 'Kopiert!';
                     btn.classList.add('copied');
                     setTimeout(function() {
@@ -329,6 +331,8 @@
                 });
             });
         }
+        wireCopy('copy-btn', btcAddress);
+        wireCopy('copy-btn-ln', "{{ lightning_address or '' }}");
 
         // Auto-Refresh alle 60s
         setInterval(refresh, 60000);

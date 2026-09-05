@@ -38,10 +38,51 @@ function navigate() {
 {% if overdue_count %}
 <div class="card" style="background:#FFEBEE;border:1px solid #F44336;">
     <strong>{{ overdue_count }}</strong> überfällige Rechnung{{ "en" if overdue_count != 1 }}:
-    {% for o in overdue[:5] %}<a href="/income" style="color:var(--red);">{{ o.id }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
+    {% for o in overdue[:5] %}<a href="/income?highlight={{ o.id }}" style="color:var(--red);">{{ o.id }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
     {% if overdue_count > 5 %}…{% endif %}
 </div>
 {% endif %}
+
+<div class="card">
+    <h2>Schnellaktionen</h2>
+    <div class="actions" style="margin-top: 0;">
+        <a href="/invoice" class="btn btn-primary">+ Rechnung</a>
+        <a href="/quotes" class="btn btn-secondary">+ Angebot</a>
+        <a href="/expenses" class="btn btn-secondary">+ Ausgabe</a>
+        <a href="/zeiten" class="btn btn-secondary">+ Zeit</a>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Aufgaben</h2>
+    {% if overdue_count or open_quotes or unbilled_total %}
+    <table>
+        {% for o in overdue %}
+        <tr id="task-{{ o.id }}">
+            <td><span class="badge" style="background:#FFEBEE;color:#D32F2F;">Überfällig ({{ o._overdue_days }} T.)</span></td>
+            <td><a href="/income?highlight={{ o.id }}" style="color: var(--orange);">{{ o.id }} – {{ o.customer_name }}</a></td>
+            <td style="text-align: right;">{{ "%.2f"|format(o.amount)|replace(".", ",") }} €</td>
+        </tr>
+        {% endfor %}
+        {% if unbilled_total and unbilled_total > 0 %}
+        <tr>
+            <td><span class="badge badge-unpaid">Offene Zeiten</span></td>
+            <td><a href="/zeiten" style="color: var(--orange);">Zeiten abrechnen</a></td>
+            <td style="text-align: right;">{{ "%.2f"|format(unbilled_total)|replace(".", ",") }} €</td>
+        </tr>
+        {% endif %}
+        {% if open_quotes %}
+        <tr>
+            <td><span class="badge badge-unpaid">Offene Angebote ({{ open_quotes|length }})</span></td>
+            <td><a href="/quotes" style="color: var(--orange);">{% for q in open_quotes[:3] %}{{ q.id }}{% if not loop.last %}, {% endif %}{% endfor %}{% if open_quotes|length > 3 %} …{% endif %}</a></td>
+            <td></td>
+        </tr>
+        {% endif %}
+    </table>
+    {% else %}
+    <div class="no-data">Alles erledigt – keine offenen Aufgaben.</div>
+    {% endif %}
+</div>
 
 <div class="stats-grid">
     <div class="card stat-card">

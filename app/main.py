@@ -1246,6 +1246,8 @@ async def dashboard_page(request: Request, year: Optional[int] = None, month: Op
     yearly = bk.get_yearly_summary(year)
     transactions = bk.get_recent_transactions(limit=10)
     overdue = bk.overdue_invoices()
+    open_quotes = [q for q in bk.get_all_quotes() if q.get("status") == "offen"]
+    unbilled_total = sum(float(e.get("amount", 0)) for e in bk.get_time_entries(unbilled_only=True))
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "active_page": "dashboard",
@@ -1260,6 +1262,8 @@ async def dashboard_page(request: Request, year: Optional[int] = None, month: Op
         "created_recurring": created_recurring,
         "overdue": overdue,
         "overdue_count": len(overdue),
+        "open_quotes": open_quotes,
+        "unbilled_total": unbilled_total,
     })
 
 
@@ -1278,8 +1282,15 @@ async def expenses_page(request: Request, year: Optional[int] = None, month: Opt
         filtered = [e for e in filtered if e["date"].startswith(f"{year}-{month:02d}")]
 
     # Enrich with labels
+    receipt_names = set()
+    try:
+        if os.path.isdir(RECEIPTS_DIR):
+            receipt_names = {os.path.splitext(f)[0] for f in os.listdir(RECEIPTS_DIR)}
+    except OSError:
+        pass
     for e in filtered:
         e["category_label"] = CATEGORY_LABELS.get(e["category"], e["category"])
+        e["has_receipt"] = e.get("id") in receipt_names
 
     total = sum(e["amount"] for e in filtered if e.get("status", "aktiv") != "storniert")
 
@@ -1374,7 +1385,8 @@ async def cancel_expense(expense_id: str):
 # ---------------------------------------------------------------------------
 
 @app.get("/income")
-async def income_page(request: Request, year: Optional[int] = None, month: Optional[int] = None):
+async def income_page(request: Request, year: Optional[int] = None, month: Optional[int] = None,
+                      highlight: str = ""):
     year = year or datetime.date.today().year
     all_invoices = bk.get_all_invoices()
 
@@ -1398,6 +1410,7 @@ async def income_page(request: Request, year: Optional[int] = None, month: Optio
         "payment_methods": PAYMENT_METHOD_LABELS,
         "overdue_ids": overdue_ids,
         "interest_rate": settings.get("default_interest_rate", 8.62),
+        "highlight": highlight,
     })
 
 
@@ -1414,13 +1427,17 @@ async def add_income_page(request: Request):
 @app.post("/income/add")
 async def add_income(
     date: str = Form(...),
-    amount: float = Form(...),
+    amount: str = Form(...),
     customer_name: str = Form(...),
     items_description: str = Form(...),
     payment_received: str = Form("false"),
     payment_date: str = Form(""),
     payment_method: str = Form("bank_transfer"),
 ):
+    try:
+        amount_float = float(amount.replace(",", "."))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Ungültiger Betrag.")
     invoice_no = _get_next_invoice_number()
     
     invoice_data = {
@@ -1428,7 +1445,7 @@ async def add_income(
         "date": date,
         "customer_name": customer_name,
         "customer_address": "",
-        "amount": amount,
+        "amount": amount_float,
         "items_description": items_description,
         "payment_received": payment_received == "true",
         "invoice_filename": None,

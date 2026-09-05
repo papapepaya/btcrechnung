@@ -62,9 +62,11 @@
         {% endfor %}
     </table>
     </div>
-    <p class="hint">Offene Zeiten pro Kunde lassen sich auf der Rechnungsseite per Knopfdruck als Positionen übernehmen.</p>
     {% else %}
-    <div class="no-data">Noch keine Zeiten erfasst.</div>
+    <div class="no-data">Noch keine Zeiten erfasst. Oben eintragen – <a href="/invoice" style="color: var(--orange);">auf der Rechnungsseite</a> lassen sie sich per Knopfdruck als Positionen übernehmen.</div>
+    {% endif %}
+    {% if entries %}
+    <p class="hint">Offene Zeiten pro Kunde lassen sich auf der Rechnungsseite per Knopfdruck als Positionen übernehmen.</p>
     {% endif %}
 </div>
 {% endblock %}

@@ -166,6 +166,28 @@
             border-bottom-color: var(--orange);
         }
 
+        /* Mehr-Dropdown */
+        .nav-more { position: relative; display: flex; align-items: stretch; }
+        .nav-more-btn {
+            background: none; border: none; border-bottom: 2px solid transparent;
+            color: var(--nav-text); padding: 16px 18px; font-size: 0.88rem;
+            font-weight: 500; font-family: inherit; cursor: pointer; white-space: nowrap;
+        }
+        .nav-more-btn:hover { color: var(--orange); background: var(--nav-hover-bg); }
+        .nav-more.active .nav-more-btn { color: var(--orange); border-bottom-color: var(--orange); }
+        .nav-more-menu {
+            display: none; position: absolute; top: 100%; left: 0; min-width: 200px;
+            background: var(--bg-nav); border: 1px solid var(--border);
+            border-radius: 0 0 var(--radius-md) var(--radius-md);
+            box-shadow: var(--shadow-md); z-index: 200; padding: 6px;
+        }
+        .nav-more:hover .nav-more-menu, .nav-more:focus-within .nav-more-menu { display: block; }
+        .nav-more-menu a {
+            display: block; padding: 10px 14px; border-bottom: none;
+            border-radius: var(--radius-sm);
+        }
+        .nav-more-menu a.active { background: var(--nav-hover-bg); }
+
         /* Dark Mode Toggle */
         .theme-toggle {
             background: none;
@@ -537,6 +559,7 @@
             .stats-grid { grid-template-columns: repeat(2, 1fr); }
             nav { padding: 0 12px; }
             nav a { padding: 12px 10px; font-size: 0.8rem; }
+            .nav-more-btn { padding: 12px 10px; font-size: 0.8rem; }
             .card { padding: 20px; }
             h1 { font-size: 1.35rem; }
             .container { padding: 20px 16px; }
@@ -557,18 +580,23 @@
             <span>BTCRechnung</span>
         </a>
         <a href="/dashboard" {% if active_page == 'dashboard' %}class="active"{% endif %}>Übersicht</a>
-        <a href="/expenses" {% if active_page == 'expenses' %}class="active"{% endif %}>Ausgaben</a>
-        <a href="/income" {% if active_page == 'income' %}class="active"{% endif %}>Einnahmen</a>
-        <a href="/euer" {% if active_page == 'euer' %}class="active"{% endif %}>EÜR</a>
-        {% if business_type == 'regulaer' and is_pro %}<a href="/ustva" {% if active_page == 'ustva' %}class="active"{% endif %}>UStVA</a>{% endif %}
         <a href="/invoice" {% if active_page == 'invoice' %}class="active"{% endif %}>Rechnung</a>
         <a href="/quotes" {% if active_page == 'quotes' %}class="active"{% endif %}>Angebote</a>
-        <a href="/zeiten" {% if active_page == 'timelog' %}class="active"{% endif %}>Zeiten</a>
-        <a href="/anlagen" {% if active_page == 'assets' %}class="active"{% endif %}>Anlagen</a>
-        <a href="/customers" {% if active_page == 'customers' %}class="active"{% endif %}>Kunden</a>
-        <a href="/recurring" {% if active_page == 'recurring' %}class="active"{% endif %}>Abos</a>
-        {% if is_pro %}<a href="/bank" {% if active_page == 'bank' %}class="active"{% endif %}>Bank</a>{% endif %}
-        {% if is_pro %}<a href="/kassenbuch" {% if active_page == 'cashbook' %}class="active"{% endif %}>Kasse</a>{% endif %}
+        <a href="/income" {% if active_page == 'income' %}class="active"{% endif %}>Einnahmen</a>
+        <a href="/expenses" {% if active_page == 'expenses' %}class="active"{% endif %}>Ausgaben</a>
+        <div class="nav-more {% if active_page in ['timelog', 'assets', 'customers', 'recurring', 'euer', 'ustva', 'bank', 'cashbook'] %}active{% endif %}">
+            <button class="nav-more-btn" aria-haspopup="true">Mehr ▾</button>
+            <div class="nav-more-menu">
+                <a href="/zeiten" {% if active_page == 'timelog' %}class="active"{% endif %}>Zeiten</a>
+                <a href="/anlagen" {% if active_page == 'assets' %}class="active"{% endif %}>Anlagen</a>
+                <a href="/customers" {% if active_page == 'customers' %}class="active"{% endif %}>Kunden</a>
+                <a href="/recurring" {% if active_page == 'recurring' %}class="active"{% endif %}>Abos</a>
+                <a href="/euer" {% if active_page == 'euer' %}class="active"{% endif %}>EÜR</a>
+                {% if business_type == 'regulaer' and is_pro %}<a href="/ustva" {% if active_page == 'ustva' %}class="active"{% endif %}>UStVA</a>{% endif %}
+                {% if is_pro %}<a href="/bank" {% if active_page == 'bank' %}class="active"{% endif %}>Bank</a>{% endif %}
+                {% if is_pro %}<a href="/kassenbuch" {% if active_page == 'cashbook' %}class="active"{% endif %}>Kasse</a>{% endif %}
+            </div>
+        </div>
         <a href="/settings" {% if active_page == 'settings' %}class="active"{% endif %} style="margin-left: auto;">⚙ Einstellungen</a>
         <button class="theme-toggle" id="themeToggle" title="Dark Mode umschalten">☀</button>
     </nav>

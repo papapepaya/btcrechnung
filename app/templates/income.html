@@ -4,7 +4,7 @@
 
 <div class="page-header-row">
     <h1>Einnahmen (Rechnungen)</h1>
-    <div style="display: flex; gap: 10px; align-items: center;">
+    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
         <a href="/income/add" class="btn btn-primary">+ Manuell hinzufügen</a>
         <div class="year-selector">
             <select onchange="location.href='/income?year='+this.value">
@@ -37,7 +37,7 @@
             <th></th>
         </tr>
         {% for inv in invoices %}
-        <tr {% if inv.get("status") == "storniert" %}style="opacity: 0.5; text-decoration: line-through;"{% endif %}>
+        <tr id="inv-{{ inv.id }}" {% if inv.get("status") == "storniert" %}style="opacity: 0.5; text-decoration: line-through;"{% elif highlight == inv.id %}style="background: var(--orange-light);"{% endif %}>
             <td style="font-weight: 500;">{{ inv.id }}</td>
             <td>{{ inv.date[8:10] }}.{{ inv.date[5:7] }}.{{ inv.date[0:4] }}</td>
             <td>{{ inv.customer_name }}</td>
@@ -89,7 +89,15 @@
     </table>
     </div>
     {% else %}
-    <div class="no-data">Noch keine Rechnungen vorhanden.</div>
+    <div class="no-data">Noch keine Rechnungen vorhanden. <a href="/invoice" style="color: var(--orange);">Erste Rechnung erstellen</a></div>
     {% endif %}
 </div>
+{% if highlight %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var row = document.getElementById('inv-{{ highlight }}');
+    if (row) row.scrollIntoView({behavior: 'smooth', block: 'center'});
+});
+</script>
+{% endif %}
 {% endblock %}

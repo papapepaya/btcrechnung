@@ -132,7 +132,7 @@
                 {% endif %}
             </td>
             <td style="text-align: right; white-space: nowrap;">
-                <a href="/expenses/{{ exp.id }}/receipt" class="btn btn-sm btn-secondary" target="_blank" title="Beleg ansehen">Beleg</a>
+                {% if exp.has_receipt %}<a href="/expenses/{{ exp.id }}/receipt" class="btn btn-sm btn-secondary" target="_blank" title="Beleg ansehen">Beleg</a>{% endif %}
                 {% if exp.get("status") != "storniert" %}
                 <form method="POST" action="/expenses/{{ exp.id }}/cancel" style="display:inline" onsubmit="return confirm('Ausgabe wirklich stornieren? Sie wird als storniert markiert und bleibt sichtbar.')">
         <input type="hidden" name="_csrf" value="{{ csrf_token }}">
@@ -143,9 +143,9 @@
         </tr>
         {% endfor %}
         <tr class="total-row">
-            <td colspan="4">Summe</td>
+            <td colspan="{% if business_type == 'regulaer' and is_pro %}5{% else %}4{% endif %}">Summe</td>
             <td style="text-align: right;">{{ "%.2f"|format(total) }} €</td>
-            <td></td>
+            <td colspan="2"></td>
         </tr>
     </table>
     </div>
