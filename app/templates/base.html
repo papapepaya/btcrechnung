@@ -109,7 +109,7 @@
             padding: 0 24px;
             display: flex;
             align-items: stretch;
-            overflow-x: auto;
+            overflow: visible;
             box-shadow: var(--shadow-sm);
             position: sticky;
             top: 0;
@@ -557,7 +557,7 @@
         @media (max-width: 768px) {
             .form-row { flex-direction: column; gap: 10px; }
             .stats-grid { grid-template-columns: repeat(2, 1fr); }
-            nav { padding: 0 12px; }
+            nav { padding: 0 12px; flex-wrap: wrap; }
             nav a { padding: 12px 10px; font-size: 0.8rem; }
             .nav-more-btn { padding: 12px 10px; font-size: 0.8rem; }
             .card { padding: 20px; }
