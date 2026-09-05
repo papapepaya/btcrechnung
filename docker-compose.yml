@@ -1,0 +1,11 @@
+services:
+  btcrechnung:
+    build: .
+    image: ghcr.io/papapepaya/btcrechnung:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/srv/btcrechnung/data
+    env_file:
+      - .env
+    restart: unless-stopped

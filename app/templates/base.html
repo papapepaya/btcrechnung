@@ -8,9 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <link rel="manifest" href="/static/manifest.json">
     <link rel="apple-touch-icon" href="/static/icon-192.png">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
     <title>{% block title %}Buchhaltung{% endblock %} – BTCRechnung</title>
     <style>
         :root {
@@ -31,6 +29,12 @@
             --radius-md: 10px;
             --radius-lg: 14px;
             --transition: all 0.2s ease;
+            --gray-100: #F5F5F5;
+            --gray-200: #EEEEEE;
+            --gray-300: #E0E0E0;
+            --gray-400: #BDBDBD;
+            --gray-500: #9E9E9E;
+            --gray-600: #666666;
         }
 
         /* Light Mode */
@@ -92,7 +96,7 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
             background: var(--bg);
             color: var(--text);
             line-height: 1.5;
@@ -370,6 +374,7 @@
         }
 
         /* Tables */
+        .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -557,6 +562,10 @@
         <a href="/euer" {% if active_page == 'euer' %}class="active"{% endif %}>EÜR</a>
         {% if business_type == 'regulaer' and is_pro %}<a href="/ustva" {% if active_page == 'ustva' %}class="active"{% endif %}>UStVA</a>{% endif %}
         <a href="/invoice" {% if active_page == 'invoice' %}class="active"{% endif %}>Rechnung</a>
+        <a href="/customers" {% if active_page == 'customers' %}class="active"{% endif %}>Kunden</a>
+        <a href="/recurring" {% if active_page == 'recurring' %}class="active"{% endif %}>Abos</a>
+        <a href="/bank" {% if active_page == 'bank' %}class="active"{% endif %}>Bank</a>
+        <a href="/kassenbuch" {% if active_page == 'cashbook' %}class="active"{% endif %}>Kasse</a>
         <a href="/settings" {% if active_page == 'settings' %}class="active"{% endif %} style="margin-left: auto;">⚙ Einstellungen</a>
         <button class="theme-toggle" id="themeToggle" title="Dark Mode umschalten">☀</button>
     </nav>

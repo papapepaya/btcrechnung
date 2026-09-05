@@ -16,6 +16,7 @@
 <div class="card" id="firma">
     <h2>Firma</h2>
     <form id="settingsForm" method="POST" action="/settings" enctype="multipart/form-data">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
         <div class="form-row">
             <div class="field">
                 <label>Firmenname</label>
@@ -61,6 +62,34 @@
                     <a href="https://buy.stripe.com/bJe5kw9TRdBd1gLbf628802" style="color: var(--orange);">Business-Lizenz kaufen (89 €) &#8594;</a>
                 </p>
                 {% endif %}
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="field" style="max-width: 200px;">
+                <label>Standard-Zahlungsziel (Tage)</label>
+                <input type="number" name="default_payment_days" value="{{ settings.default_payment_days or 14 }}" min="0" max="90">
+            </div>
+        </div>
+
+        <h2 style="margin-top: 24px;">Mahnwesen (§ 286/288 BGB)</h2>
+        <div class="form-row">
+            <div class="field" style="max-width: 150px;">
+                <label>Gebühr Stufe 1 (€)</label>
+                <input type="number" name="dunning_fee_1" value="{{ settings.dunning_fee_1 or 5 }}" step="0.5" min="0">
+            </div>
+            <div class="field" style="max-width: 150px;">
+                <label>Gebühr Stufe 2 (€)</label>
+                <input type="number" name="dunning_fee_2" value="{{ settings.dunning_fee_2 or 7.5 }}" step="0.5" min="0">
+            </div>
+            <div class="field" style="max-width: 150px;">
+                <label>Gebühr Stufe 3 (€)</label>
+                <input type="number" name="dunning_fee_3" value="{{ settings.dunning_fee_3 or 10 }}" step="0.5" min="0">
+            </div>
+            <div class="field" style="max-width: 170px;">
+                <label>Verzugszins (% p.a.)</label>
+                <input type="number" name="default_interest_rate" value="{{ settings.default_interest_rate or 8.62 }}" step="0.01" min="0">
+                <p class="hint">B2B: Basiszins + 9pp (§ 288 BGB).</p>
             </div>
         </div>
 
@@ -143,6 +172,23 @@
             </div>
         </div>
 
+        <h2 style="margin-top: 24px;">BTCPay Server (optional)</h2>
+        <p style="font-size: 0.82rem; color: var(--gray-600); margin-bottom: 14px;">
+            Eigener BTCPay Server für automatische Zahlungsbestätigung via Webhook
+            (<code>/webhook/btcpay</code>, Events: InvoiceSettled). Leer = deaktiviert.
+        </p>
+        <div class="form-row">
+            <div class="field">
+                <label>BTCPay URL</label>
+                <input type="text" name="btcpay_url" value="{{ settings.btcpay_url or '' }}"
+                       placeholder="https://btcpay.example.com" spellcheck="false" autocomplete="off">
+            </div>
+            <div class="field">
+                <label>Webhook-Secret</label>
+                <input type="password" name="btcpay_webhook_secret" value="{{ settings.btcpay_webhook_secret or '' }}"
+                       placeholder="Webhook-Secret aus BTCPay" spellcheck="false" autocomplete="off">
+            </div>
+        </div>
         <div class="form-row">
             <div class="field">
                 <label>Lightning-Adresse (optional)</label>
@@ -152,6 +198,22 @@
                     Z.B. <code>deinname@getalby.com</code> oder <code>name@walletofsatoshi.com</code>.<br>
                     Wird automatisch für Bitcoin-Zahlungen im QR-Code eingefügt.
                 </p>
+            </div>
+        </div>
+
+        <h2 style="margin-top: 24px;">Logo</h2>
+        {% if settings.has_custom_logo %}
+        <p style="font-size: 0.82rem; color: var(--gray-600); margin-bottom: 10px;">Eigenes Logo aktiv.</p>
+        {% endif %}
+        <div class="form-row">
+            <div class="field">
+                <label>Logo hochladen (PNG/JPG, max. 2 MB)</label>
+                <input type="file" name="logo" accept="image/png,image/jpeg">
+            </div>
+            <div class="field">
+                <label>Optionen</label>
+                <label class="checkbox-inline"><input type="checkbox" name="delete_logo" value="1"> Logo entfernen</label>
+                <label class="checkbox-inline"><input type="checkbox" name="logo_hidden" value="1" {% if settings.logo_hidden %}checked{% endif %}> Logo auf Rechnung ausblenden</label>
             </div>
         </div>
     </form>
@@ -172,6 +234,7 @@
     </p>
     {% endif %}
     <form method="POST" action="/settings/license">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
         <div class="form-row">
             <div class="field">
                 <label>E-Mail (Kauf-E-Mail)</label>
@@ -196,6 +259,7 @@
 <div class="card" id="passwort">
     <h2>Passwort ändern</h2>
     <form method="POST" action="/settings/password">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
         <div class="form-row">
             <div class="field">
                 <label>Aktuelles Passwort</label>
@@ -204,12 +268,12 @@
         </div>
         <div class="form-row">
             <div class="field">
-                <label>Neues Passwort (min. 4 Zeichen)</label>
-                <input type="password" name="new_password" required minlength="4">
+                <label>Neues Passwort (min. 8 Zeichen)</label>
+                <input type="password" name="new_password" required minlength="8">
             </div>
             <div class="field">
                 <label>Bestätigen</label>
-                <input type="password" name="new_password_confirm" required minlength="4">
+                <input type="password" name="new_password_confirm" required minlength="8">
             </div>
         </div>
         {% if pw_message %}

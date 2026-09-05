@@ -34,6 +34,9 @@ ENV/
 # Configuration & Secrets
 .env
 *.db
+*.db-wal
+*.db-shm
+data/backup-*.zip
 cert.pem
 key.pem
 

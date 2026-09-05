@@ -25,6 +25,7 @@
         {% endfor %}
     </div>
     {% if invoices %}
+    <div class="table-wrap">
     <table>
         <tr>
             <th>Nr.</th>
@@ -51,6 +52,8 @@
                 {% if inv.get("payment_method") %}<br><span style="font-size: 0.75rem; color: var(--text-muted);">{{ payment_methods.get(inv.payment_method, inv.payment_method) }}</span>{% endif %}
                 {% else %}
                 <span class="badge badge-unpaid">Offen</span>
+                {% if inv.id in overdue_ids %}<br><span class="badge" style="background:#FFEBEE;color:#D32F2F;">Überfällig</span>{% endif %}
+                {% if inv.get("dunning_level") %}<br><span style="font-size:0.75rem;color:var(--text-muted);">Mahnstufe {{ inv.dunning_level }}{% if inv.get("dunning_fees") %} · +{{ "%.2f"|format(inv.dunning_fees)|replace(".", ",") }} €{% endif %}</span>{% endif %}
                 {% endif %}
             </td>
             <td style="text-align: right;">
@@ -60,10 +63,18 @@
                 {% if inv.get("status") != "storniert" %}
                 {% if not inv.payment_received %}
                 <a href="/income/{{ inv.id }}/paid" class="btn btn-sm btn-secondary">Bezahlt</a>
+                {% if inv.id in overdue_ids %}
+                <form method="POST" action="/income/{{ inv.id }}/remind" style="display:inline" onsubmit="return confirm('Mahnstufe erhöhen und Gebühr buchen?')">
+                    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-sm btn-secondary">Mahnen</button>
+                </form>
+                <a href="/income/{{ inv.id }}/mahnung" class="btn btn-sm btn-secondary" target="_blank">Mahn-PDF</a>
+                {% endif %}
                 {% else %}
                 <a href="/income/{{ inv.id }}/paid" class="btn btn-sm btn-secondary">Bearbeiten</a>
                 {% endif %}
                 <form method="POST" action="/income/{{ inv.id }}/cancel" style="display:inline" onsubmit="return confirm('Rechnung wirklich stornieren? Sie wird als storniert markiert und bleibt sichtbar.')">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
                     <button type="submit" class="btn btn-sm btn-danger">Stornieren</button>
                 </form>
                 {% endif %}
@@ -76,6 +87,7 @@
             <td colspan="2"></td>
         </tr>
     </table>
+    </div>
     {% else %}
     <div class="no-data">Noch keine Rechnungen vorhanden.</div>
     {% endif %}

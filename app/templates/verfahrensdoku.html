@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="de">
+<head><meta charset="UTF-8"><title>Verfahrensdokumentation</title></head>
+<body style="font-family: sans-serif; max-width: 800px; margin: 40px auto; line-height: 1.6;">
+<h1>Verfahrensdokumentation (GoBD)</h1>
+<p><strong>Unternehmen:</strong> {{ business_name }}<br>
+<strong>Adresse:</strong> {{ business_address }}<br>
+<strong>Steuernummer:</strong> {{ tax_id }}<br>
+<strong>Zeitraum:</strong> {{ year }}<br>
+<strong>Stand:</strong> {{ today }} · Software BTCRechnung v{{ version }}</p>
+<h2>1. Aufzeichnungssystem</h2>
+<p>Rechnungen, Ausgaben und Zahlungen werden in BTCRechnung erfasst (SQLite-Datenbank mit WAL-Modus, Revisionssicherheit via Audit-Log mit SHA-256-Prüfsummen). Stornierungen erfolgen ausschließlich durch Storno-Buchung, keine Löschung.</p>
+<h2>2. Belegerfassung</h2>
+<p>Eingangsbelege werden zeitnah mit Datum, Kategorie, Betrag und Zahlungsart erfasst. Ausgangsrechnungen erhalten fortlaufende Nummern (RE-Jahr-NNNN, Gutschriften GS-). PDFs mit eingebetteter ZUGFeRD-XML werden im Datenordner archiviert.</p>
+<h2>3. Aufbewahrung</h2>
+<p>Belege und Exporte (EÜR, DATEV, GoBD-ZIP) werden mindestens 10 Jahre unverändert aufbewahrt. Backups erfolgen durch den Anwender (Datenordner kopieren).</p>
+<h2>4. Zugriffsschutz</h2>
+<p>Zugang via Passwort (min. 8 Zeichen), Sitzungen serverseitig mit Logout-Invalidierung, Rate-Limit bei Fehlversuchen.</p>
+<h2>5. Änderungen</h2>
+<p>Änderungen an Verfahren werden hier versioniert dokumentiert.</p>
+<p><em>Dieses Dokument ist eine Vorlage und ersetzt keine steuerliche Beratung. Bitte mit Steuerberater abstimmen und unterschreiben.</em></p>
+</body>
+</html>

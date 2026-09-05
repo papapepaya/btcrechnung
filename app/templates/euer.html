@@ -29,6 +29,7 @@
         {% if is_pro %}
         <a href="/datev/export?year={{ year }}" class="btn btn-secondary">DATEV Export</a>
         {% endif %}
+        <a href="/gobd/export?year={{ year }}" class="btn btn-secondary">GoBD-Export (ZIP)</a>
         <div class="year-selector">
             <select onchange="location.href='/euer?year='+this.value">
                 {% for y in years %}
@@ -53,6 +54,7 @@
 
 <div class="card">
     <h2>Betriebseinnahmen</h2>
+    <div class="table-wrap">
     <table>
         <tr>
             <th style="width: 60px;">Zeile</th>
@@ -70,10 +72,12 @@
             <td style="text-align: right;">{{ "%.2f"|format(euer.gross_revenue)|replace(".", ",") }} €</td>
         </tr>
     </table>
+    </div>
 </div>
 
 <div class="card">
     <h2>Betriebsausgaben</h2>
+    <div class="table-wrap">
     <table>
         <tr>
             <th style="width: 60px;">Zeile</th>
@@ -116,10 +120,12 @@
             <td style="text-align: right;">{{ "%.2f"|format(euer.total_expenses)|replace(".", ",") }} €</td>
         </tr>
     </table>
+    </div>
 </div>
 
 <div class="card" style="text-align: center;">
     <h2>Gewinnermittlung</h2>
+    <div class="table-wrap">
     <table>
         <tr>
             <td style="font-size: 1rem;">Betriebseinnahmen</td>
@@ -136,5 +142,6 @@
             </td>
         </tr>
     </table>
+    </div>
 </div>
 {% endblock %}

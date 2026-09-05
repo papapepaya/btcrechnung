@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Abos{% endblock %}
+{% block content %}
+<div class="page-header-row">
+    <h1>Wiederkehrende Rechnungen</h1>
+    <form method="POST" action="/recurring/run" style="display:inline">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-secondary">Jetzt prüfen</button>
+    </form>
+</div>
+<div class="card">
+    <h2>Neues Abo</h2>
+    <form method="POST" action="/recurring">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <div class="form-row">
+            <div class="field">
+                <label>Name (intern)</label>
+                <input type="text" name="name" required placeholder="z.B. Hosting Kunde X">
+            </div>
+            <div class="field" style="max-width: 170px;">
+                <label>Rhythmus</label>
+                <select name="frequency">
+                    <option value="weekly">Wöchentlich</option>
+                    <option value="monthly" selected>Monatlich</option>
+                    <option value="quarterly">Quartalsweise</option>
+                    <option value="yearly">Jährlich</option>
+                </select>
+            </div>
+            <div class="field" style="max-width: 170px;">
+                <label>Nächster Lauf</label>
+                <input type="date" name="next_run" value="{{ today }}">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="field">
+                <label>Kunde</label>
+                <input type="text" name="customer_name" required list="customerList" placeholder="Max Mustermann">
+                <datalist id="customerList">
+                    {% for c in customers or [] %}<option value="{{ c.name }}">{% endfor %}
+                </datalist>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="field">
+                <label>Adresse</label>
+                <textarea name="customer_address" placeholder="Musterstraße 1, 12345 Stadt"></textarea>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="field">
+                <label>Position (Beschreibung)</label>
+                <input type="text" name="item_desc" required placeholder="Monatliche Betreuung">
+            </div>
+            <div class="field" style="max-width: 140px;">
+                <label>Preis (€)</label>
+                <input type="text" name="item_price" required value="0" inputmode="decimal">
+            </div>
+            <div class="field" style="max-width: 140px;">
+                <label>Zahlungsziel</label>
+                <input type="number" name="payment_days" value="14" min="0" max="90">
+            </div>
+        </div>
+        <label class="checkbox-inline"><input type="checkbox" name="enable_btc" value="1"> Bitcoin aktivieren</label>
+        <div style="margin-top: 12px;"><button type="submit" class="btn btn-primary">Abo speichern</button></div>
+        <p class="hint">Positionen als JSON (mehrere): <code>items_json</code> – Standard ist eine Position, Menge 1.</p>
+        <input type="hidden" name="items_json" id="itemsJson">
+    </form>
+</div>
+<div class="card">
+    <h2>Aktive Abos ({{ profiles|length }})</h2>
+    {% if profiles %}
+    <div class="table-wrap">
+    <table>
+        <tr><th>Name</th><th>Kunde</th><th>Rhythmus</th><th>Nächster Lauf</th><th>Status</th><th></th></tr>
+        {% for p in profiles %}
+        <tr>
+            <td>{{ p.name }}</td>
+            <td>{{ p.customer_name }}</td>
+            <td>{{ p.frequency }}</td>
+            <td>{{ p.next_run }}</td>
+            <td>{% if p.active %}<span class="badge badge-paid">aktiv</span>{% else %}<span class="badge badge-unpaid">pausiert</span>{% endif %}</td>
+            <td style="white-space: nowrap;">
+                <form method="POST" action="/recurring/{{ p._row_id }}/toggle" style="display:inline">
+                    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-secondary btn-sm">{% if p.active %}Pausieren{% else %}Aktivieren{% endif %}</button>
+                </form>
+                <form method="POST" action="/recurring/{{ p._row_id }}/delete" style="display:inline" onsubmit="return confirm('Abo wirklich löschen?')">
+                    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-secondary btn-sm">Löschen</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+    </div>
+    {% else %}
+    <div class="no-data">Noch keine Abos. Erzeugung erfolgt automatisch bei Dashboard-Besuch (fällt kein Server-Dienst nötig).</div>
+    {% endif %}
+</div>
+<script>
+document.querySelector('form[action="/recurring"]').addEventListener('submit', function() {
+    var desc = this.querySelector('[name="item_desc"]').value;
+    var price = (this.querySelector('[name="item_price"]').value || '0').replace(',', '.');
+    document.getElementById('itemsJson').value = JSON.stringify([{description: desc, quantity: 1, unit_price: parseFloat(price) || 0, vat_rate: 0}]);
+});
+</script>
+{% endblock %}

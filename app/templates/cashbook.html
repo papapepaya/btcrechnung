@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Kassenbuch{% endblock %}
+{% block content %}
+<div class="page-header-row">
+    <h1>Kassenbuch {{ year }}</h1>
+    <div class="year-selector">
+        <select onchange="location.href='/kassenbuch?year='+this.value">
+            {% for y in years %}<option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>{% endfor %}
+        </select>
+    </div>
+</div>
+<div class="card">
+    <h2>Manueller Eintrag</h2>
+    <form method="POST" action="/kassenbuch/add">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <div class="form-row">
+            <div class="field" style="max-width: 170px;">
+                <label>Datum</label>
+                <input type="date" name="date" value="{{ today }}" required>
+            </div>
+            <div class="field" style="max-width: 150px;">
+                <label>Typ</label>
+                <select name="entry_type"><option value="einnahme">Einnahme</option><option value="ausgabe" selected>Ausgabe</option></select>
+            </div>
+            <div class="field">
+                <label>Beschreibung</label>
+                <input type="text" name="description" required placeholder="z.B. Büromaterial bar">
+            </div>
+            <div class="field" style="max-width: 140px;">
+                <label>Betrag (€)</label>
+                <input type="text" name="amount" required value="0" inputmode="decimal">
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Eintragen</button>
+    </form>
+</div>
+<div class="card">
+    <h2>Einträge ({{ entries|length }}) – Saldo: {{ "%.2f"|format(balance)|replace(".", ",") }} €</h2>
+    {% if entries %}
+    <div class="table-wrap">
+    <table>
+        <tr><th>Datum</th><th>Typ</th><th>Beschreibung</th><th style="text-align:right;">Betrag</th></tr>
+        {% for e in entries %}
+        <tr>
+            <td>{{ e.date }}</td>
+            <td>{{ e.type }}</td>
+            <td>{{ e.description }}</td>
+            <td style="text-align: right;" class="{% if e.amount >= 0 %}positive{% else %}negative{% endif %}">{{ "%.2f"|format(e.amount)|replace(".", ",") }} €</td>
+        </tr>
+        {% endfor %}
+        <tr class="total-row"><td colspan="3">Saldo</td><td style="text-align:right;">{{ "%.2f"|format(balance)|replace(".", ",") }} €</td></tr>
+    </table>
+    </div>
+    {% else %}
+    <div class="no-data">Keine Einträge. Bar-Ausgaben und bar bezahlte Rechnungen erscheinen automatisch.</div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -59,7 +59,6 @@ rm -f "${RELEASE_DIR}/key.pem"
 # Aufräumen in der Kopie
 find "${RELEASE_DIR}" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
 find "${RELEASE_DIR}" -name "*.pyc" -delete 2>/dev/null || true
-rm -rf "${RELEASE_DIR}/app/static/sw.js" 2>/dev/null || true
 
 echo "Erstelle ZIP..."
 cd "${BUILD_DIR}"

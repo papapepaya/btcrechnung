@@ -12,6 +12,7 @@
     </p>
 
     <form method="POST" action="/income/add">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
         <div class="form-row">
             <div class="field">
                 <label>Datum</label>

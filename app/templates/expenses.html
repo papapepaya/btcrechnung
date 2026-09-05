@@ -16,6 +16,7 @@
 <div class="card">
     <h2>Neue Ausgabe</h2>
     <form method="POST" action="/expenses">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
         <div class="form-row">
             <div class="field">
                 <label>Datum</label>
@@ -87,6 +88,7 @@
         {% endfor %}
     </div>
     {% if expenses %}
+    <div class="table-wrap">
     <table>
         <tr>
             <th>Datum</th>
@@ -118,6 +120,7 @@
             <td style="text-align: right;">
                 {% if exp.get("status") != "storniert" %}
                 <form method="POST" action="/expenses/{{ exp.id }}/cancel" style="display:inline" onsubmit="return confirm('Ausgabe wirklich stornieren? Sie wird als storniert markiert und bleibt sichtbar.')">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
                     <button type="submit" class="btn btn-sm btn-danger">Stornieren</button>
                 </form>
                 {% endif %}
@@ -130,6 +133,7 @@
             <td></td>
         </tr>
     </table>
+    </div>
     {% else %}
     <div class="no-data">Noch keine Ausgaben erfasst.</div>
     {% endif %}

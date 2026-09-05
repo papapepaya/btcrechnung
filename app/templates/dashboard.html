@@ -30,6 +30,19 @@ function navigate() {
 }
 </script>
 
+{% if created_recurring %}
+<div class="card" style="background:#E8F5E9;border:1px solid #4CAF50;">
+    Abo-Rechnungen erstellt: <strong>{{ created_recurring|join(', ') }}</strong>
+</div>
+{% endif %}
+{% if overdue_count %}
+<div class="card" style="background:#FFEBEE;border:1px solid #F44336;">
+    <strong>{{ overdue_count }}</strong> überfällige Rechnung{{ "en" if overdue_count != 1 }}:
+    {% for o in overdue[:5] %}<a href="/income" style="color:var(--red);">{{ o.id }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
+    {% if overdue_count > 5 %}…{% endif %}
+</div>
+{% endif %}
+
 <div class="stats-grid">
     <div class="card stat-card">
         <h3>Einnahmen ({{ month_name }})</h3>
@@ -55,6 +68,7 @@ function navigate() {
 
 <div class="card">
     <h2>Monatsübersicht {{ year }}</h2>
+    <div class="table-wrap">
     <table>
         <tr>
             <th>Monat</th>
@@ -79,11 +93,13 @@ function navigate() {
             <td style="text-align: right;" class="{% if yearly.profit >= 0 %}positive{% else %}negative{% endif %}">{{ "%.2f"|format(yearly.profit) }} €</td>
         </tr>
     </table>
+    </div>
 </div>
 
 <div class="card">
     <h2>Letzte Aktivitäten</h2>
     {% if transactions %}
+    <div class="table-wrap">
     <table>
         <tr>
             <th>Datum</th>
@@ -100,6 +116,7 @@ function navigate() {
         </tr>
         {% endfor %}
     </table>
+    </div>
     {% else %}
     <div class="no-data">Noch keine Aktivitäten.</div>
     {% endif %}
