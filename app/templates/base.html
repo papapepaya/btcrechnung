@@ -136,17 +136,10 @@
             white-space: nowrap;
         }
 
-        nav .brand-icon {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 32px;
-            height: 32px;
-            background: var(--orange);
-            color: #fff;
+        nav .brand img {
+            width: 28px;
+            height: 28px;
             border-radius: var(--radius-sm);
-            font-size: 1rem;
-            font-weight: 800;
         }
 
         nav a {
@@ -582,7 +575,7 @@
 <body>
     <nav>
         <a href="/dashboard" class="brand">
-            <span class="brand-icon">₿</span>
+            <img src="/static/favicon.svg" alt="" width="24" height="24" style="border-radius: 6px;">
             <span>BTCRechnung</span>
         </a>
         <a href="/dashboard" {% if active_page == 'dashboard' %}class="active"{% endif %}>Übersicht</a>
