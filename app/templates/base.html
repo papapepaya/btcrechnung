@@ -564,8 +564,8 @@
         <a href="/invoice" {% if active_page == 'invoice' %}class="active"{% endif %}>Rechnung</a>
         <a href="/customers" {% if active_page == 'customers' %}class="active"{% endif %}>Kunden</a>
         <a href="/recurring" {% if active_page == 'recurring' %}class="active"{% endif %}>Abos</a>
-        <a href="/bank" {% if active_page == 'bank' %}class="active"{% endif %}>Bank</a>
-        <a href="/kassenbuch" {% if active_page == 'cashbook' %}class="active"{% endif %}>Kasse</a>
+        {% if is_pro %}<a href="/bank" {% if active_page == 'bank' %}class="active"{% endif %}>Bank</a>{% endif %}
+        {% if is_pro %}<a href="/kassenbuch" {% if active_page == 'cashbook' %}class="active"{% endif %}>Kasse</a>{% endif %}
         <a href="/settings" {% if active_page == 'settings' %}class="active"{% endif %} style="margin-left: auto;">⚙ Einstellungen</a>
         <button class="theme-toggle" id="themeToggle" title="Dark Mode umschalten">☀</button>
     </nav>

@@ -77,7 +77,7 @@ class SimpleTemplates:
     Vermeidet den 'unhashable dict' Bug mit PyInstaller."""
     def __init__(self, env):
         self.env = env
-    def TemplateResponse(self, name, context):
+    def TemplateResponse(self, name, context, status_code: int = 200):
         from starlette.responses import HTMLResponse
         # Business-Typ und Pro-Status automatisch injizieren
         if "is_pro" not in context:
@@ -101,7 +101,7 @@ class SimpleTemplates:
             except Exception:
                 context["csrf_token"] = ""
         html = self.env.get_template(name).render(**context)
-        return HTMLResponse(html)
+        return HTMLResponse(html, status_code=status_code)
 
 
 templates = SimpleTemplates(env)
@@ -786,8 +786,20 @@ async def btcpay_status():
     return {"configured": bool(url and secret), "url": bool(url), "webhook": bool(secret)}
 
 
+def _require_pro(request: Request, feature_name: str):
+    if not is_pro_license():
+        return templates.TemplateResponse("upsell.html", {
+            "request": request, "active_page": "",
+            "feature_name": feature_name,
+        }, status_code=403)
+    return None
+
+
 @app.get("/bank")
 async def bank_page(request: Request):
+    gated = _require_pro(request, "Bankimport & Abgleich")
+    if gated is not None:
+        return gated
     return templates.TemplateResponse("bank.html", {
         "request": request, "active_page": "bank",
         "transactions": sorted(bk.get_bank_transactions(), key=lambda t: t.get("date", ""), reverse=True)[:200],
@@ -797,6 +809,9 @@ async def bank_page(request: Request):
 
 @app.post("/bank/import")
 async def bank_import(request: Request, file: UploadFile = File(...)):
+    gated = _require_pro(request, "Bankimport & Abgleich")
+    if gated is not None:
+        return gated
     contents = await file.read()
     if len(contents) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Datei zu groß (max. 5 MB).")
@@ -813,7 +828,10 @@ async def bank_import(request: Request, file: UploadFile = File(...)):
 
 
 @app.post("/bank/{row_id}/match")
-async def bank_match(row_id: int, invoice_id: str = Form(""), action: str = Form("match")):
+async def bank_match(request: Request, row_id: int, invoice_id: str = Form(""), action: str = Form("match")):
+    gated = _require_pro(request, "Bankimport & Abgleich")
+    if gated is not None:
+        return gated
     if action == "mark_paid" and invoice_id:
         bk.mark_invoice_paid(invoice_id, datetime.date.today().isoformat(), payment_method="bank_transfer")
         bk.set_bank_tx_match(row_id, invoice_id, "verbucht")
@@ -826,6 +844,9 @@ async def bank_match(row_id: int, invoice_id: str = Form(""), action: str = Form
 
 @app.get("/kassenbuch")
 async def cashbook_page(request: Request, year: Optional[int] = None):
+    gated = _require_pro(request, "Kassenbuch")
+    if gated is not None:
+        return gated
     year = year or datetime.date.today().year
     entries = [e for e in bk.get_cashbook_entries() if (e.get("date") or "").startswith(str(year))]
     balance = sum(float(e.get("amount", 0)) for e in entries)
@@ -834,18 +855,6 @@ async def cashbook_page(request: Request, year: Optional[int] = None):
         "entries": entries, "balance": balance,
         "years": _get_available_years(), "today": datetime.date.today().isoformat(),
     })
-
-
-@app.post("/kassenbuch/add")
-async def cashbook_add(request: Request, date: str = Form(...), entry_type: str = Form("ausgabe"),
-                       description: str = Form(...), amount: str = Form(...)):
-    amt = float(amount.replace(",", "."))
-    if entry_type == "ausgabe":
-        amt = -abs(amt)
-    else:
-        amt = abs(amt)
-    bk.add_cashbook_entry(date, entry_type, description, amt)
-    return Response(status_code=302, headers={"Location": "/kassenbuch"})
 
 
 @app.get("/gobd/export")

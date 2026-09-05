@@ -997,11 +997,6 @@ def get_cashbook_entries() -> list:
     return entries
 
 
-def add_cashbook_entry(date: str, entry_type: str, description: str, amount: float) -> int:
-    return _generic_insert("cashbook", {"date": date, "type": entry_type,
-                                        "description": description, "amount": float(amount)})
-
-
 def overdue_invoices() -> list:
     import datetime as _dt
     today = _dt.date.today().isoformat()
