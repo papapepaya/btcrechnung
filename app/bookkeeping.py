@@ -1147,6 +1147,69 @@ def mark_time_billed(row_ids: list, invoice_id: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Anlagevermögen / AfA
+# ---------------------------------------------------------------------------
+
+GWG_LIMIT = 800.0
+
+
+def get_assets() -> list:
+    entries = _generic_all("assets")
+    entries.sort(key=lambda e: e.get("purchase_date", ""))
+    return entries
+
+
+def add_asset(name: str, purchase_date: str, cost: float, years: int) -> int:
+    cost = float(cost)
+    is_gwg = cost <= GWG_LIMIT
+    return _generic_insert("assets", {
+        "name": name.strip(), "purchase_date": purchase_date,
+        "cost": round(cost, 2), "years": int(years) if not is_gwg else 1,
+        "is_gwg": is_gwg,
+    })
+
+
+def delete_asset(row_id: int) -> bool:
+    return _generic_delete("assets", row_id)
+
+
+def afa_for_year(year: int) -> list:
+    """Lineare AfA pro Anlagegut für ein Jahr (pro-rata Monat ab Kaufmonat).
+    GWG (<=800 EUR): voll im Kaufjahr."""
+    out = []
+    for a in get_assets():
+        try:
+            pdate = a.get("purchase_date", "")[:10]
+            py, pm = int(pdate[:4]), int(pdate[5:7])
+        except (ValueError, TypeError):
+            continue
+        cost = float(a.get("cost", 0))
+        if a.get("is_gwg"):
+            if py == year:
+                out.append({**a, "afa": round(cost, 2), "note": "GWG-Sofortabschreibung"})
+            continue
+        years = max(1, int(a.get("years", 3)))
+        annual = cost / years
+        first_year_months = 13 - pm
+        if year == py:
+            out.append({**a, "afa": round(annual * first_year_months / 12, 2),
+                        "note": f"pro-rata {first_year_months}/12"})
+        elif py < year < py + years:
+            if year == py + years - 1 and first_year_months < 12:
+                rest = round(cost - sum(
+                    (annual * first_year_months / 12) if y == py else annual
+                    for y in range(py, year)), 2)
+                out.append({**a, "afa": rest, "note": "Restjahr"})
+            else:
+                out.append({**a, "afa": round(annual, 2), "note": "volles Jahr"})
+    return out
+
+
+def afa_total(year: int) -> float:
+    return round(sum(e["afa"] for e in afa_for_year(year)), 2)
+
+
+# ---------------------------------------------------------------------------
 # Calculations
 # ---------------------------------------------------------------------------
 
@@ -1230,6 +1293,8 @@ def generate_euer(year: int) -> dict:
             e["amount"] for e in expenses if e["category"] in app_cats
         )
 
+    afa = afa_total(year)
+    expense_totals["depreciation"] = expense_totals.get("depreciation", 0) + afa
     gross_revenue = sum(i["amount"] for i in invoices)
     total_expenses = sum(expense_totals.values())
 
@@ -1237,6 +1302,7 @@ def generate_euer(year: int) -> dict:
         "year": year,
         "gross_revenue": gross_revenue,
         **expense_totals,
+        "afa_amount": afa,
         "total_expenses": total_expenses,
         "operating_result": gross_revenue - total_expenses,
     }

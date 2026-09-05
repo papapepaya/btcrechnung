@@ -39,6 +39,7 @@ def init_schema(con: sqlite3.Connection | None = None):
         con.execute("CREATE TABLE IF NOT EXISTS cashbook (id INTEGER PRIMARY KEY AUTOINCREMENT, data TEXT NOT NULL)")
         con.execute("CREATE TABLE IF NOT EXISTS quotes (id TEXT PRIMARY KEY, data TEXT NOT NULL)")
         con.execute("CREATE TABLE IF NOT EXISTS timelog (id INTEGER PRIMARY KEY AUTOINCREMENT, data TEXT NOT NULL)")
+        con.execute("CREATE TABLE IF NOT EXISTS assets (id INTEGER PRIMARY KEY AUTOINCREMENT, data TEXT NOT NULL)")
     finally:
         if own:
             con.close()

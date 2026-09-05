@@ -65,9 +65,11 @@ if not os.path.exists(BTC_ICON_PATH):
     BTC_ICON_PATH = os.path.join(PROJECT_DIR, "Bitcoin.svg")
 COUNTER_FILE = os.path.join(DATA_DIR, "invoice_counter.json")
 PDF_DIR = os.path.join(DATA_DIR, "invoices")
+RECEIPTS_DIR = os.path.join(DATA_DIR, "receipts")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 
 os.makedirs(PDF_DIR, exist_ok=True)
+os.makedirs(RECEIPTS_DIR, exist_ok=True)
 
 env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
 
@@ -752,6 +754,37 @@ async def api_timelog_unbilled(customer: str = ""):
     return entries
 
 
+@app.get("/anlagen")
+async def assets_page(request: Request, year: Optional[int] = None):
+    year = year or datetime.date.today().year
+    return templates.TemplateResponse("assets.html", {
+        "request": request, "active_page": "assets", "year": year,
+        "assets": bk.get_assets(), "afa_rows": bk.afa_for_year(year),
+        "afa_total": bk.afa_total(year), "gwg_limit": bk.GWG_LIMIT,
+        "years": _get_available_years(), "today": datetime.date.today().isoformat(),
+    })
+
+
+@app.post("/anlagen")
+async def assets_add(request: Request, name: str = Form(...), purchase_date: str = Form(...),
+                     cost: str = Form(...), years: str = Form("3")):
+    try:
+        c = float(cost.replace(",", "."))
+        y = int(years)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Kosten/Dauer ungültig")
+    if c <= 0 or y < 1 or y > 50:
+        raise HTTPException(status_code=400, detail="Kosten müssen > 0, Dauer 1–50 Jahre sein")
+    bk.add_asset(name, purchase_date, c, y)
+    return Response(status_code=302, headers={"Location": "/anlagen"})
+
+
+@app.post("/anlagen/{row_id}/delete")
+async def assets_delete(row_id: int):
+    bk.delete_asset(row_id)
+    return Response(status_code=302, headers={"Location": "/anlagen"})
+
+
 def _recurring_create_fn(payload: dict) -> dict:
     from . import invoicing as invmod
     settings = bk.get_settings()
@@ -1019,6 +1052,9 @@ async def gobd_export(year: Optional[int] = None):
                 p = os.path.join(PDF_DIR, f"{inv['id']}.pdf")
                 if os.path.exists(p):
                     z.write(p, arcname=f"belege/{inv['id']}.pdf")
+        if os.path.isdir(RECEIPTS_DIR):
+            for fn in sorted(os.listdir(RECEIPTS_DIR)):
+                z.write(os.path.join(RECEIPTS_DIR, fn), arcname=f"belege/ausgaben/{fn}")
         euer = bk.generate_euer(year)
         z.writestr(f"euer/EUER_{year}.json", json.dumps(euer, ensure_ascii=False, indent=2))
         z.writestr(f"audit/audit_{year}.json",
@@ -1265,6 +1301,7 @@ async def create_expense(
     payment_method: str = Form("bank_transfer"),
     vat_rate: Optional[str] = Form(None),
     notes: str = Form(""),
+    receipt: UploadFile = File(None),
 ):
     # Komma zu Punkt konvertieren (deutsche Eingabe)
     amount_float = float(amount.replace(",", "."))
@@ -1285,8 +1322,38 @@ async def create_expense(
         "payment_method": payment_method,
         "notes": notes or None,
     }
-    bk.create_expense(data)
+    created = bk.create_expense(data)
+    if receipt and receipt.filename:
+        contents = await receipt.read()
+        if contents and len(contents) <= 5 * 1024 * 1024:
+            ext = os.path.splitext(receipt.filename or "")[1].lower()[:5] or ".jpg"
+            if ext not in (".jpg", ".jpeg", ".png", ".pdf", ".webp"):
+                ext = ".jpg"
+            os.makedirs(RECEIPTS_DIR, exist_ok=True)
+            with open(os.path.join(RECEIPTS_DIR, f"{created['id']}{ext}"), "wb") as f:
+                f.write(contents)
     return Response(status_code=302, headers={"Location": "/expenses"})
+
+
+@app.post("/expenses/ocr")
+async def expenses_ocr(file: UploadFile = File(...)):
+    from . import ocr as ocrmod
+    contents = await file.read()
+    if not contents or len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Datei leer oder zu groß (max. 5 MB).")
+    res = ocrmod.scan(contents)
+    res["ocr_available"] = ocrmod.is_available()
+    return res
+
+
+@app.get("/expenses/{expense_id}/receipt")
+async def expense_receipt(expense_id: str):
+    for ext in (".jpg", ".jpeg", ".png", ".pdf", ".webp"):
+        p = os.path.join(RECEIPTS_DIR, f"{expense_id}{ext}")
+        if os.path.exists(p):
+            from starlette.responses import FileResponse
+            return FileResponse(p)
+    raise HTTPException(status_code=404, detail="Kein Beleg vorhanden")
 
 
 @app.post("/expenses/{expense_id}/cancel")

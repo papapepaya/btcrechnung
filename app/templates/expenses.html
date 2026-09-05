@@ -15,8 +15,22 @@
 
 <div class="card">
     <h2>Neue Ausgabe</h2>
-    <form method="POST" action="/expenses">
+    <form method="POST" action="/expenses" enctype="multipart/form-data" id="expenseForm">
         <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <div class="card" style="background: var(--bg-secondary); margin-bottom: 14px;">
+            <div class="form-row" style="margin-bottom: 0;">
+                <div class="field">
+                    <label>Belegfoto (optional) – füllt Felder per OCR vor</label>
+                    <input type="file" id="receiptScan" accept="image/*">
+                    <p class="hint" id="ocrHint">Foto wählen → Betrag, Datum, Lieferant werden erkannt (falls OCR verfügbar).</p>
+                </div>
+                <div class="field">
+                    <label>Beleg anhängen</label>
+                    <input type="file" name="receipt" accept="image/*,.pdf">
+                    <p class="hint">Wird revisionssicher abgelegt und in den GoBD-Export aufgenommen.</p>
+                </div>
+            </div>
+        </div>
         <div class="form-row">
             <div class="field">
                 <label>Datum</label>
@@ -117,7 +131,8 @@
                 <span class="badge badge-paid">Aktiv</span>
                 {% endif %}
             </td>
-            <td style="text-align: right;">
+            <td style="text-align: right; white-space: nowrap;">
+                <a href="/expenses/{{ exp.id }}/receipt" class="btn btn-sm btn-secondary" target="_blank" title="Beleg ansehen">Beleg</a>
                 {% if exp.get("status") != "storniert" %}
                 <form method="POST" action="/expenses/{{ exp.id }}/cancel" style="display:inline" onsubmit="return confirm('Ausgabe wirklich stornieren? Sie wird als storniert markiert und bleibt sichtbar.')">
         <input type="hidden" name="_csrf" value="{{ csrf_token }}">
@@ -138,4 +153,32 @@
     <div class="no-data">Noch keine Ausgaben erfasst.</div>
     {% endif %}
 </div>
+<script>
+document.getElementById('receiptScan').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const hint = document.getElementById('ocrHint');
+    hint.textContent = 'Erkennung läuft …';
+    try {
+        const fd = new FormData();
+        fd.append('file', file);
+        const csrf = document.querySelector('#expenseForm input[name="_csrf"]');
+        const headers = {};
+        if (csrf && csrf.value) headers['x-csrf-token'] = csrf.value;
+        const resp = await fetch('/expenses/ocr', { method: 'POST', body: fd, headers });
+        const res = await resp.json();
+        if (!res.available) {
+            hint.textContent = 'OCR nicht verfügbar (Tesseract fehlt) – bitte manuell ausfüllen. Beleg kann trotzdem angehängt werden.';
+            return;
+        }
+        const form = document.getElementById('expenseForm');
+        if (res.amount != null) form.querySelector('[name="amount"]').value = String(res.amount).replace('.', ',');
+        if (res.date) form.querySelector('[name="date"]').value = res.date;
+        if (res.vendor) form.querySelector('[name="vendor"]').value = res.vendor;
+        hint.textContent = 'Erkannt – bitte prüfen und ggf. korrigieren.';
+    } catch (err) {
+        hint.textContent = 'Fehler: ' + err.message;
+    }
+});
+</script>
 {% endblock %}
