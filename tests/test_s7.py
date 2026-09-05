@@ -30,7 +30,10 @@ def test_validation():
     assert validate_invoice("basic", "F", "A", "K", "A2", "", None, 10) == []
     errs = validate_invoice("en16931", "F", "A", "K", "A2", "", None, 10)
     assert any("Steuernummer" in e for e in errs) and any("Leitweg" in e for e in errs)
-    assert validate_invoice("en16931", "F", "A", "K", "A2", "DE1", "991-12345-12", 10) == []
+    assert validate_invoice("en16931", "F", "Str. 1, 12345 Stadt", "K", "Weg 2, 54321 Dorf",
+                            "DE1", "991-12345-12", 10,
+                            seller_email="f@example.de", seller_phone="0123",
+                            iban="DE75512108001245126199") == []
 
 
 def _xsd_validate(xml: bytes, profile: str) -> bool:
@@ -57,13 +60,40 @@ def test_kleinunternehmer_exempt():
     assert "§ 19 UStG" in xml
 
 
+def test_payment_means_terms_currency():
+    import datetime
+    xml = _xml(due_date=datetime.date(2026, 9, 19),
+               payment_terms="Zahlbar bis 19.09.2026",
+               seller_email="firma@example.de", seller_phone="0123",
+               iban="DE75512108001245126199")
+    assert "<ram:IBANID>DE75512108001245126199</ram:IBANID>" in xml
+    assert "<ram:DueDateDateTime>" in xml
+    assert 'currencyID="EUR"' in xml
+    assert "ShipToTradeParty" not in xml
+    assert "BusinessProcessSpecifiedDocumentContextParameter" not in xml
+
+
+def test_en16931_extras():
+    import datetime
+    xml = _xml(profile="en16931", buyer_reference="991-12345-12",
+               due_date=datetime.date(2026, 9, 19),
+               seller_email="firma@example.de", seller_phone="0123",
+               iban="DE75512108001245126199")
+    assert "xrechnung_3.0" in xml
+    assert "BusinessProcessSpecifiedDocumentContextParameter" in xml
+    assert 'schemeID="EM"' in xml
+    assert "<ram:DefinedTradeContact>" in xml
+    # ExemptionReason nur auf Kopfebene, nie in Zeilen (je 1x open+close)
+    assert xml.count("<ram:ExemptionReason>") == 1
+
+
 def test_regulaer_vat_and_credit():
     xml = _xml(is_kleinunternehmer=False,
                vat_breakdown=[{"rate": 0.19, "net": 100.0}],
                type_code="381")
     assert "<ram:TypeCode>381</ram:TypeCode>" in xml
     assert "<ram:RateApplicablePercent>19.00</ram:RateApplicablePercent>" in xml
-    assert "<ram:CalculatedAmount>19.00</ram:CalculatedAmount>" in xml
+    assert ">19.00</ram:CalculatedAmount>" in xml
 
 
 def test_leitweg_persistence():

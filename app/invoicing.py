@@ -90,7 +90,9 @@ def create_invoice(
     buyer_reference = (payload.get("buyer_reference") or "").strip()
     problems = validate_invoice(profile, biz.get("name", ""), biz.get("address", ""),
                                 customer_name, customer_address,
-                                settings.get("tax_id", ""), buyer_reference, total_gross)
+                                settings.get("tax_id", ""), buyer_reference, total_gross,
+                                settings.get("business_email", ""), biz.get("phone", ""),
+                                payload.get("iban") or settings.get("bank_iban", ""))
     if problems:
         raise ValueError("E-Rechnung: " + " ".join(problems))
 
@@ -210,17 +212,24 @@ def create_invoice(
         for li in line_items_xml:
             by_rate[li["vat_rate"]] = by_rate.get(li["vat_rate"], 0.0) + li["line_total"]
         vat_breakdown = [{"rate": r, "net": round(n, 2)} for r, n in sorted(by_rate.items())]
+    pay_terms = f"Zahlbar bis {due_date.strftime('%d.%m.%Y')}"
+    if disc_pct and disc_days:
+        pay_terms += f", {disc_pct:.2f} % Skonto bei Zahlung innerhalb von {disc_days} Tagen".replace(".", ",")
     zugferd_xml = generate_zugferd_xml(
         invoice_number=invoice_no, issue_date=inv_date,
         seller_name=biz["name"], seller_address=biz["address"],
         buyer_name=customer_name, buyer_address=customer_address,
-        line_items=line_items_xml, total_eur=total_gross, iban=payload.get("iban"),
+        line_items=line_items_xml, total_eur=total_gross, iban=payload.get("iban") or settings.get("bank_iban", ""),
         is_kleinunternehmer=is_kleinunternehmer,
         seller_tax_id=settings.get("tax_id", ""),
         profile=profile, buyer_reference=buyer_reference or None,
         vat_breakdown=vat_breakdown,
         type_code="381" if doc_type == "gutschrift" else "380",
         total_net=total_net,
+        seller_email=settings.get("business_email", "") or None,
+        seller_phone=biz.get("phone", "") or None,
+        due_date=due_date, payment_terms=pay_terms,
+        proprietary_id=("BTC:" + btc_address) if (btc_address and not (payload.get("iban") or settings.get("bank_iban", ""))) else None,
     )
     if facturx:
         try:
