@@ -7,6 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <link rel="manifest" href="/static/manifest.json">
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="apple-touch-icon" href="/static/icon-192.png">
 
     <title>{% block title %}Buchhaltung{% endblock %} – BTCRechnung</title>
@@ -94,6 +95,11 @@
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :focus-visible {
+            outline: 2px solid var(--orange);
+            outline-offset: 2px;
+        }
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;

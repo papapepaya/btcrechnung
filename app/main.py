@@ -103,11 +103,8 @@ class SimpleTemplates:
             except Exception:
                 context["csrf_token"] = ""
         if "purchase_url" not in context:
-            try:
-                context["purchase_url"] = os.environ.get("PURCHASE_URL") or bk.get_settings().get(
-                    "purchase_url", "https://buy.stripe.com/bJe5kw9TRdBd1gLbf628802")
-            except Exception:
-                context["purchase_url"] = "https://buy.stripe.com/bJe5kw9TRdBd1gLbf628802"
+            context["purchase_url"] = os.environ.get(
+                "PURCHASE_URL", "https://buy.stripe.com/8x2eV64zxeFh7F9bf628804")
         html = self.env.get_template(name).render(**context)
         return HTMLResponse(html, status_code=status_code)
 
@@ -1954,9 +1951,6 @@ async def settings_license(request: Request):
     settings = bk.get_settings()
     settings["license_email"] = email
     settings["license_key"] = key
-    purchase_url = (form.get("purchase_url", "") or "").strip()
-    if purchase_url:
-        settings["purchase_url"] = purchase_url
     bk.save_settings(settings)
 
     license_message = None

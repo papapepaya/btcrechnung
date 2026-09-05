@@ -49,7 +49,7 @@ DEFAULT_SETTINGS = {
     "btcpay_url": "",
     "btcpay_webhook_secret": "",
     "xrechnung_profile": "basic",
-    "purchase_url": "https://buy.stripe.com/bJe5kw9TRdBd1gLbf628802",
+    "purchase_url": "https://buy.stripe.com/8x2eV64zxeFh7F9bf628804",
     "dunning_fee_1": 5.0,
     "dunning_fee_2": 7.5,
     "dunning_fee_3": 10.0,
