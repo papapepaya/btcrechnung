@@ -20,6 +20,12 @@
                 <textarea name="address" placeholder="Musterstraße 1, 12345 Musterstadt"></textarea>
             </div>
         </div>
+        <div class="form-row">
+            <div class="field" style="max-width: 280px;">
+                <label>Leitweg-ID (optional)</label>
+                <input type="text" name="leitweg_id" placeholder="z.B. 991-12345-12" spellcheck="false" autocomplete="off">
+            </div>
+        </div>
         <button type="submit" class="btn btn-primary">Speichern</button>
     </form>
 </div>
@@ -28,11 +34,12 @@
     {% if customers %}
     <div class="table-wrap">
     <table>
-        <tr><th>Name</th><th>Adresse</th><th></th></tr>
+        <tr><th>Name</th><th>Adresse</th><th>Leitweg-ID</th><th></th></tr>
         {% for c in customers %}
         <tr>
             <td>{{ c.name }}</td>
             <td>{{ c.address }}</td>
+            <td style="font-family: monospace;">{{ c.leitweg_id or '–' }}</td>
             <td>
                 <form method="POST" action="/customers/{{ c.id }}/delete" style="display:inline" onsubmit="return confirm('Wirklich löschen?')">
                     <input type="hidden" name="_csrf" value="{{ csrf_token }}">

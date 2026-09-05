@@ -467,6 +467,7 @@ class InvoiceRequest(BaseModel):
     # Bitcoin aktivieren
     enable_btc: bool = False
     doc_type: str = "rechnung"
+    buyer_reference: Optional[str] = None
     time_entry_ids: List[int] = []
     payment_days: int = 14
     discount_days: int = 0
@@ -570,8 +571,9 @@ async def customers_create(
     request: Request,
     name: str = Form(...),
     address: str = Form(""),
+    leitweg_id: str = Form(""),
 ):
-    bk.upsert_customer(name, address)
+    bk.upsert_customer(name, address, leitweg_id)
     return Response(status_code=302, headers={"Location": "/customers"})
 
 
@@ -1109,6 +1111,7 @@ async def generate_pdf(request: InvoiceRequest):
             "doc_type": request.doc_type, "payment_days": request.payment_days,
             "discount_days": request.discount_days, "discount_percent": request.discount_percent,
             "invoice_date": request.invoice_date,
+            "buyer_reference": request.buyer_reference,
         }
         logo_path = get_logo_path()
         result = invmod.create_invoice(
@@ -1819,6 +1822,7 @@ async def settings_save(
     logo: UploadFile = File(None),
     delete_logo: str = Form(""),
     logo_hidden: Optional[str] = Form(None),
+    xrechnung_profile: str = Form("basic"),
     btcpay_url: str = Form(""),
     btcpay_webhook_secret: str = Form(""),
     default_payment_days: str = Form("14"),
@@ -1849,6 +1853,7 @@ async def settings_save(
     except ValueError:
         settings["btc_discount_percent"] = 0
     settings["lightning_address"] = lightning_address.strip() or None
+    settings["xrechnung_profile"] = xrechnung_profile if xrechnung_profile in ("basic", "en16931") else "basic"
     settings["btcpay_url"] = btcpay_url.strip()
     if btcpay_webhook_secret.strip():
         settings["btcpay_webhook_secret"] = btcpay_webhook_secret.strip()

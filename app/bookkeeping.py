@@ -48,6 +48,7 @@ DEFAULT_SETTINGS = {
     "default_payment_days": 14,
     "btcpay_url": "",
     "btcpay_webhook_secret": "",
+    "xrechnung_profile": "basic",
     "dunning_fee_1": 5.0,
     "dunning_fee_2": 7.5,
     "dunning_fee_3": 10.0,
@@ -573,8 +574,12 @@ def cancel_invoice(invoice_id: str, reason: str = "") -> bool:
 def _customer_rows_to_dicts(rows) -> list:
     out = []
     for r in rows:
-        out.append({"id": r[0], "name": r[1], "address": r[2] or ""})
+        out.append({"id": r[0], "name": r[1], "address": r[2] or "",
+                    "leitweg_id": ((r[3] if len(r) > 3 else "") or "")})
     return out
+
+
+
 
 
 def get_all_customers() -> list:
@@ -584,7 +589,7 @@ def get_all_customers() -> list:
             con = dbmod.connect()
             try:
                 dbmod.init_schema(con)
-                rows = con.execute("SELECT id, name, address FROM customers ORDER BY name COLLATE NOCASE").fetchall()
+                rows = con.execute("SELECT id, name, address, leitweg_id FROM customers ORDER BY name COLLATE NOCASE").fetchall()
                 if not rows:
                     import datetime
                     now = datetime.datetime.now().isoformat()
@@ -607,7 +612,7 @@ def get_all_customers() -> list:
                                 con.execute(
                                     "INSERT OR IGNORE INTO customers (name, address, created, updated) VALUES (?, ?, ?, ?)",
                                     (n, a, now, now))
-                        rows = con.execute("SELECT id, name, address FROM customers ORDER BY name COLLATE NOCASE").fetchall()
+                        rows = con.execute("SELECT id, name, address, leitweg_id FROM customers ORDER BY name COLLATE NOCASE").fetchall()
                 return _customer_rows_to_dicts(rows)
             finally:
                 con.close()
@@ -629,11 +634,12 @@ def search_customers(query: str, limit: int = 10) -> list:
     return [c for c in allc if q in c["name"].lower()][:limit]
 
 
-def upsert_customer(name: str, address: str = "") -> dict | None:
+def upsert_customer(name: str, address: str = "", leitweg_id: str = "") -> dict | None:
     name = (name or "").strip()
     if not name:
         return None
     address = (address or "").strip()
+    leitweg_id = (leitweg_id or "").strip()
     if _db_ready():
         try:
             from . import db as dbmod
@@ -644,16 +650,19 @@ def upsert_customer(name: str, address: str = "") -> dict | None:
                 now = datetime.datetime.now().isoformat()
                 with con:
                     con.execute(
-                        "INSERT INTO customers (name, address, created, updated) VALUES (?, ?, ?, ?) "
-                        "ON CONFLICT(name) DO UPDATE SET address=excluded.address, updated=excluded.updated",
-                        (name, address, now, now))
-                row = con.execute("SELECT id, name, address FROM customers WHERE name=?", (name,)).fetchone()
-                return {"id": row[0], "name": row[1], "address": row[2] or ""}
+                        "INSERT INTO customers (name, address, leitweg_id, created, updated) VALUES (?, ?, ?, ?, ?) "
+                        "ON CONFLICT(name) DO UPDATE SET address=excluded.address, "
+                        "leitweg_id=CASE WHEN excluded.leitweg_id='' THEN customers.leitweg_id "
+                        "ELSE excluded.leitweg_id END, updated=excluded.updated",
+                        (name, address, leitweg_id, now, now))
+                row = con.execute("SELECT id, name, address, leitweg_id FROM customers WHERE name=?", (name,)).fetchone()
+                return {"id": row[0], "name": row[1], "address": row[2] or "",
+                        "leitweg_id": row[3] or ""}
             finally:
                 con.close()
         except Exception as e:
             print(f"upsert_customer fallback: {e}")
-    return {"id": 0, "name": name, "address": address}
+    return {"id": 0, "name": name, "address": address, "leitweg_id": leitweg_id}
 
 
 def delete_customer(customer_id: int) -> bool:

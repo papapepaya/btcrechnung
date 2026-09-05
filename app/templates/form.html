@@ -135,6 +135,13 @@
                 <textarea id="customer_address" required placeholder="Musterstraße 1, 12345 Musterstadt"></textarea>
             </div>
         </div>
+        <div class="form-row">
+            <div class="field" style="max-width: 280px;">
+                <label>Leitweg-ID (optional, XRechnung)</label>
+                <input type="text" id="buyer_reference" placeholder="z.B. 991-12345-12" spellcheck="false" autocomplete="off">
+                <p class="hint">Nur für Rechnungen an Behörden nötig.</p>
+            </div>
+        </div>
     </div>
 
     <!-- Konditionen -->
@@ -378,6 +385,7 @@
             items: items,
             enable_btc: document.getElementById('btc_enabled').checked,
             doc_type: document.getElementById('doc_type').value,
+            buyer_reference: document.getElementById('buyer_reference').value || null,
             payment_days: parseInt(document.getElementById('payment_days').value || '14', 10),
             discount_days: parseInt(document.getElementById('discount_days').value || '0', 10),
             discount_percent: parseFloat(String(document.getElementById('discount_percent').value || '0').replace(',', '.')) || 0,
@@ -513,6 +521,9 @@
             const hit = list.find(c => c.name === name) || list[0];
             if (hit && hit.address && !document.getElementById('customer_address').value) {
                 document.getElementById('customer_address').value = hit.address;
+            }
+            if (hit && hit.leitweg_id && !document.getElementById('buyer_reference').value) {
+                document.getElementById('buyer_reference').value = hit.leitweg_id;
             }
         } catch (err) {}
     });

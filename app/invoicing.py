@@ -62,7 +62,7 @@ def create_invoice(
     import qrcode  # noqa - sicherstellen dass vorhanden
     from . import bitcoin as btcmod
     from .pdf_utils import generate_qr_base64, generate_girocode_data, get_image_base64
-    from .zugferd import generate_zugferd_xml
+    from .zugferd import generate_zugferd_xml, validate_invoice
     from . import bookkeeping as bk
 
     try:
@@ -84,6 +84,16 @@ def create_invoice(
     total_net, total_vat, total_gross, is_kleinunternehmer = totals(items, business_type, is_pro)
     total_btc = total_gross / btc_rate if btc_rate else 0
 
+    profile = settings.get("xrechnung_profile", "basic")
+    if profile not in ("basic", "en16931"):
+        profile = "basic"
+    buyer_reference = (payload.get("buyer_reference") or "").strip()
+    problems = validate_invoice(profile, biz.get("name", ""), biz.get("address", ""),
+                                customer_name, customer_address,
+                                settings.get("tax_id", ""), buyer_reference, total_gross)
+    if problems:
+        raise ValueError("E-Rechnung: " + " ".join(problems))
+
     doc_type = (payload.get("doc_type") or "rechnung").lower()
     if doc_type not in ("rechnung", "gutschrift"):
         doc_type = "rechnung"
@@ -95,7 +105,10 @@ def create_invoice(
         invoice_no = invoice_no.replace("RE-", "GS-", 1)
 
     try:
-        bk.upsert_customer(customer_name, customer_address)
+        if buyer_reference:
+            bk.upsert_customer(customer_name, customer_address, buyer_reference)
+        else:
+            bk.upsert_customer(customer_name, customer_address)
     except Exception:
         pass
 
@@ -172,6 +185,7 @@ def create_invoice(
         tax_id=settings.get("tax_id", ""), business_type=business_type,
         doc_type=doc_type, payment_days=pay_days, due_date=due_date.strftime("%d.%m.%Y"),
         discount_days=disc_days, discount_percent=disc_pct,
+        buyer_reference=buyer_reference,
     )
 
     pdf_buffer = io.BytesIO()
@@ -196,11 +210,14 @@ def create_invoice(
         line_items=line_items_xml, total_eur=total_gross, iban=payload.get("iban"),
         is_kleinunternehmer=is_kleinunternehmer,
         seller_tax_id=settings.get("tax_id", ""),
+        profile=profile, buyer_reference=buyer_reference or None,
     )
     if facturx:
         try:
             pdf_content = facturx.generate_facturx_from_binary(
-                pdf_content, zugferd_xml, facturx_level='basic', check_xsd=False)
+                pdf_content, zugferd_xml,
+                facturx_level='en16931' if profile == 'en16931' else 'basic',
+                check_xsd=False)
         except Exception as fe:
             print(f"ZUGFeRD Fehler: {fe}")
 
@@ -229,6 +246,7 @@ def create_invoice(
         "btc_rate_at_creation": btc_rate, "btc_amount": total_btc, "btc_address": btc_address,
         "doc_type": doc_type, "payment_days": pay_days, "due_date": due_date.isoformat(),
         "discount_days": disc_days, "discount_percent": disc_pct,
+        "buyer_reference": buyer_reference, "xrechnung_profile": profile,
         "dunning_level": 0, "dunning_fees": 0.0,
     }
     bk.log_invoice(record)

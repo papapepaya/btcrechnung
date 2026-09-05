@@ -93,6 +93,18 @@
             </div>
         </div>
 
+        <h2 style="margin-top: 24px;">E-Rechnung</h2>
+        <div class="form-row">
+            <div class="field" style="max-width: 320px;">
+                <label>ZUGFeRD-Profil</label>
+                <select name="xrechnung_profile">
+                    <option value="basic" {% if settings.xrechnung_profile != 'en16931' %}selected{% endif %}>Basic (Standard, B2B/B2C)</option>
+                    <option value="en16931" {% if settings.xrechnung_profile == 'en16931' %}selected{% endif %}>EN 16931 / XRechnung (Behörden, Leitweg-ID Pflicht)</option>
+                </select>
+                <p class="hint">XRechnung erfordert Steuernummer und Leitweg-ID je Kunde.</p>
+            </div>
+        </div>
+
         <h2 style="margin-top: 24px;">Steuern</h2>
         <div class="form-row">
             <div class="field">

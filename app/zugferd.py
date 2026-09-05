@@ -23,6 +23,8 @@ def generate_zugferd_xml(
     buyer_tax_id: Optional[str] = None,
     iban: Optional[str] = None,
     is_kleinunternehmer: bool = True,
+    profile: str = "basic",
+    buyer_reference: Optional[str] = None,
 ) -> bytes:
     ns = {
         "rsm": "urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100",
@@ -46,12 +48,17 @@ def generate_zugferd_xml(
     # --- ExchangedDocumentContext ---
     ctx = SubElement(root, f"{{{ns['rsm']}}}ExchangedDocumentContext")
     guideline = SubElement(ctx, f"{{{ns['ram']}}}GuidelineSpecifiedDocumentContextParameter")
-    SubElement(guideline, f"{{{ns['ram']}}}ID").text = "urn:cen.eu:en16931:2017#compliant#urn:factur-x.eu:1p0:basic"
+    if profile == "en16931":
+        SubElement(guideline, f"{{{ns['ram']}}}ID").text = "urn:cen.eu:en16931:2017"
+    else:
+        SubElement(guideline, f"{{{ns['ram']}}}ID").text = "urn:cen.eu:en16931:2017#compliant#urn:factur-x.eu:1p0:basic"
 
     # --- ExchangedDocument ---
     doc = SubElement(root, f"{{{ns['rsm']}}}ExchangedDocument")
     SubElement(doc, f"{{{ns['ram']}}}ID").text = invoice_number
     SubElement(doc, f"{{{ns['ram']}}}TypeCode").text = "380"
+
+
 
     issue = SubElement(doc, f"{{{ns['ram']}}}IssueDateTime")
     ts = SubElement(issue, f"{{{ns['udt']}}}DateTimeString")
@@ -91,6 +98,8 @@ def generate_zugferd_xml(
 
     # -- TradeAgreement --
     agr = SubElement(tx, f"{{{ns['ram']}}}ApplicableHeaderTradeAgreement")
+    if buyer_reference:
+        SubElement(agr, f"{{{ns['ram']}}}BuyerReference").text = buyer_reference
 
     seller = SubElement(agr, f"{{{ns['ram']}}}SellerTradeParty")
     SubElement(seller, f"{{{ns['ram']}}}Name").text = seller_name
@@ -183,3 +192,34 @@ def _add_address(party_element, address_str: str, ns: dict):
 def _register_ns(prefix, uri):
     import xml.etree.ElementTree as ET
     ET.register_namespace(prefix, uri)
+
+
+LEITWEG_RE = r"^[0-9]{2,12}-[0-9A-Za-z\-]{1,30}-[0-9A-Za-z]{2}$|^[0-9A-Za-z\-]{5,50}$"
+
+
+def validate_invoice(profile: str, seller_name: str, seller_address: str,
+                     buyer_name: str, buyer_address: str, seller_tax_id: str,
+                     buyer_reference: Optional[str], total_eur: float) -> list:
+    """Prueft Pflichtfelder je Profil. Gibt Liste von Fehlertexten zurueck (leer = ok)."""
+    import re
+    errors = []
+    if not seller_name or not seller_name.strip():
+        errors.append("Absendername fehlt (Einstellungen → Firma).")
+    if not seller_address or not seller_address.strip():
+        errors.append("Absenderadresse fehlt (Einstellungen → Firma).")
+    if not buyer_name or not buyer_name.strip():
+        errors.append("Kundenname fehlt.")
+    if not buyer_address or not buyer_address.strip():
+        errors.append("Kundenadresse fehlt.")
+    if total_eur is None or float(total_eur) < 0:
+        errors.append("Ungültiger Gesamtbetrag.")
+    if profile == "en16931":
+        if not seller_tax_id or not seller_tax_id.strip():
+            errors.append("Steuernummer/USt-IdNr. fehlt (Pflicht für XRechnung, Einstellungen → Steuern).")
+        if not buyer_reference or not buyer_reference.strip():
+            errors.append("Leitweg-ID fehlt (Pflicht für XRechnung an Behörden).")
+        elif not re.match(LEITWEG_RE, buyer_reference.strip()):
+            errors.append("Leitweg-ID hat ungültiges Format (z.B. 991-12345-12).")
+    elif buyer_reference and not re.match(LEITWEG_RE, buyer_reference.strip()):
+        errors.append("Leitweg-ID hat ungewöhnliches Format – bitte prüfen.")
+    return errors
