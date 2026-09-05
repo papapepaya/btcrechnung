@@ -18,13 +18,15 @@
 
 ## Schnellstart
 
-### Ausführbare Version (Windows)
+### Ausführbare Version (Windows / Linux / macOS)
 
-1. Download der neuesten Version von [btcrechnung.de](https://btcrechnung.de)
-2. ZIP entpacken
-3. `BTCRechnung.exe` doppelklicken
+1. Download der neuesten Version von [GitHub Releases](https://github.com/papapepaya/btcrechnung/releases/latest)
+2. Entpacken (`BTCRechnung-windows.zip`, `-linux.tar.gz` oder `-macos.tar.gz` für Apple Silicon)
+3. `BTCRechnung` doppelklicken (Windows: `BTCRechnung.exe`)
 4. Browser öffnet sich automatisch unter `http://127.0.0.1:8000`
 5. Passwort setzen → fertig
+
+Hinweis macOS: Beim ersten Start ggf. Rechtsklick → Öffnen (unsigniertes Binary). Für Beleg-OCR zusätzlich `brew install tesseract tesseract-lang`.
 
 ### Aus dem Quellcode (Linux / macOS)
 

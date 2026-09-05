@@ -72,6 +72,8 @@ a = Analysis(
         'app.migrate_json',
         'app.invoicing',
         'app.bankimport',
+        'app.ocr',
+        'pytesseract',
         'cryptography.hazmat.primitives.asymmetric.ed25519',
     ] + xhtml2pdf_hidden + reportlab_hidden + lxml_hidden + bip_utils_hidden + facturx_hidden,
     hookspath=[],
