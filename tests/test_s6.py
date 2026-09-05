@@ -11,6 +11,25 @@ def test_ocr_graceful():
     assert ocr.scan(b"nope")["available"] == ocr.is_available()
 
 
+def test_ocr_real_image():
+    import pytest
+    from app import ocr
+    if not ocr.is_available():
+        pytest.skip("tesseract fehlt")
+    from PIL import Image, ImageDraw
+    import io
+    img = Image.new("L", (1200, 600), 255)
+    d = ImageDraw.Draw(img)
+    y = 60
+    for ln in ["Test GmbH", "SUMME 42,50 EUR", "05.09.2026"]:
+        d.text((80, y), ln, fill=0)
+        y += 80
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    res = ocr.scan(buf.getvalue())
+    assert res["available"] and res["amount"] == 42.5 and res["date"] == "2026-09-05"
+
+
 def test_afa():
     from app import bookkeeping as bk
     from app import db
