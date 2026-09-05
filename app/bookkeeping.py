@@ -873,13 +873,16 @@ def delete_recurring_profile(row_id: int) -> bool:
     return _generic_delete("recurring", row_id)
 
 
-def run_due_recurring(create_fn) -> list:
+def run_due_recurring(create_fn, profile_ids: list | None = None) -> list:
     """Prüft fällige Abos (next_run <= heute), erstellt Rechnungen via create_fn(payload)->dict.
-    Gibt Liste erstellter Rechnungsnummern zurück. Lazy-Cron: Aufruf bei Dashboard-Besuch."""
+    Gibt Liste erstellter Rechnungsnummern zurück. Lazy-Cron: Aufruf bei Dashboard-Besuch.
+    profile_ids schränkt ein (für Tests)."""
     import datetime as _dt
     today = _dt.date.today().isoformat()
     created = []
     for p in get_recurring_profiles():
+        if profile_ids is not None and p.get("_row_id") not in profile_ids:
+            continue
         if not p.get("active"):
             continue
         if (p.get("next_run") or "9999") > today:

@@ -8,6 +8,12 @@
         <button type="submit" class="btn btn-secondary">Jetzt prüfen</button>
     </form>
 </div>
+{% if run_result is not none %}
+<div class="card" style="{% if run_result %}background:#E8F5E9;border:1px solid #4CAF50;{% else %}background:var(--bg-secondary);{% endif %}">
+    {% if run_result %}Abo-Rechnungen erstellt: <strong>{{ run_result|join(', ') }}</strong>
+    {% else %}Keine fälligen Abos – alles aktuell.{% endif %}
+</div>
+{% endif %}
 <div class="card">
     <h2>Neues Abo</h2>
     <form method="POST" action="/recurring">

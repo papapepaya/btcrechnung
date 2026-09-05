@@ -21,7 +21,13 @@ def test_recurring_crud():
                                      "next_run": "2099-01-01", "active": True})
     assert pid > 0
     assert bk.get_recurring_profile(pid)["name"] == "T"
-    assert bk.run_due_recurring(lambda p: {"invoice_no": "X"}) == []
+    assert bk.run_due_recurring(lambda p: {"invoice_no": "X"}, profile_ids=[pid]) == []
+    due = bk.save_recurring_profile({"name": "T-due", "customer_name": "K",
+                                     "items": [], "frequency": "monthly",
+                                     "next_run": "2020-01-01", "active": True})
+    assert bk.run_due_recurring(lambda p: {"invoice_no": "X"}, profile_ids=[due]) == ["X"]
+    assert bk.get_recurring_profile(due)["next_run"] == "2020-02-01"
+    assert bk.delete_recurring_profile(due)
     assert bk.delete_recurring_profile(pid)
 
 

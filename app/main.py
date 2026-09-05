@@ -808,12 +808,14 @@ def _recurring_create_fn(payload: dict) -> dict:
 
 
 @app.get("/recurring")
-async def recurring_page(request: Request):
+async def recurring_page(request: Request, ran: Optional[int] = None, created: str = ""):
+    created_list = [c for c in created.split(",") if c] if ran else None
     return templates.TemplateResponse("recurring.html", {
         "request": request, "active_page": "recurring",
         "profiles": bk.get_recurring_profiles(),
         "customers": bk.get_all_customers(),
         "today": datetime.date.today().isoformat(),
+        "run_result": created_list,
     })
 
 
@@ -864,7 +866,9 @@ async def recurring_run(request: Request):
     accept = request.headers.get("accept", "")
     if "application/json" in accept:
         return {"created": created}
-    return Response(status_code=302, headers={"Location": "/recurring"})
+    import urllib.parse
+    q = urllib.parse.urlencode({"ran": 1, "created": ",".join(created)})
+    return Response(status_code=302, headers={"Location": f"/recurring?{q}"})
 
 
 @app.post("/income/{invoice_id}/remind")
