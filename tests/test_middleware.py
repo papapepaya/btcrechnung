@@ -35,6 +35,9 @@ def test_post_form_survives_middleware():
     from app import bookkeeping as bk, auth as a
     s = bk.get_settings()
     old_email = s.get("license_email", "")
+    old_pw = s.get("password_hash")
+    s["password_hash"] = a.hash_password("ci-test-pw")
+    bk.save_settings(s)
     token = a.create_session(bk)
     csrf = a.csrf_token_for_session(bk, token)
     try:
@@ -48,4 +51,8 @@ def test_post_form_survives_middleware():
         a.destroy_session(bk, token)
         s = bk.get_settings()
         s["license_email"] = old_email
+        if old_pw is None:
+            s.pop("password_hash", None)
+        else:
+            s["password_hash"] = old_pw
         bk.save_settings(s)
