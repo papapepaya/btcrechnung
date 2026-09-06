@@ -37,6 +37,67 @@ def test_main_wrapper_free():
         bk.save_settings(s)
 
 
+def _call(method, path, body=b"", cookies=""):
+    import asyncio
+    from app.main import app
+    headers = [(b"cookie", cookies.encode())] if cookies else []
+    if body:
+        headers += [(b"content-type", b"application/x-www-form-urlencoded"),
+                    (b"content-length", str(len(body)).encode())]
+    scope = {"type": "http", "http_version": "1.1", "method": method, "scheme": "http",
+             "path": path, "raw_path": path.encode(), "query_string": b"",
+             "headers": headers, "client": ("test", 5000), "server": ("test", 80)}
+    done = {"n": False}
+
+    async def receive():
+        if not done["n"]:
+            done["n"] = True
+            return {"type": "http.request", "body": body, "more_body": False}
+        return {"type": "http.disconnect"}
+
+    out = {}
+
+    async def send(msg):
+        out.setdefault("msgs", []).append(msg)
+
+    asyncio.run(app(scope, receive, send))
+    start = next(m for m in out["msgs"] if m["type"] == "http.response.start")
+    return start["status"], dict(start.get("headers", [])).get(b"location", b"").decode()
+
+
+def test_license_gate():
+    from app import bookkeeping as bk, auth as a
+    from app.license import free_key_for
+    s = bk.get_settings()
+    old_email, old_key, old_pw = s.get("license_email", ""), s.get("license_key", ""), s.get("password_hash")
+    s["password_hash"] = a.hash_password("gate-pw")
+    s["license_email"] = ""
+    s["license_key"] = ""
+    bk.save_settings(s)
+    token = a.create_session(bk)
+    try:
+        status, loc = _call("GET", "/dashboard", cookies=f"session={token}")
+        assert status == 302 and "license_required=1" in loc
+        status, _ = _call("GET", "/settings", cookies=f"session={token}")
+        assert status == 200
+        status, _ = _call("POST", "/generate-pdf", b"{}", cookies=f"session={token}")
+        assert status == 402
+        s["license_email"] = "free@test.de"
+        s["license_key"] = free_key_for("free@test.de")
+        bk.save_settings(s)
+        status, _ = _call("GET", "/dashboard", cookies=f"session={token}")
+        assert status == 200
+    finally:
+        a.destroy_session(bk, token)
+        s["license_email"] = old_email
+        s["license_key"] = old_key
+        if old_pw is None:
+            s.pop("password_hash", None)
+        else:
+            s["password_hash"] = old_pw
+        bk.save_settings(s)
+
+
 def test_monthly_count():
     from app import bookkeeping as bk
     import datetime

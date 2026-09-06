@@ -87,6 +87,11 @@ class SimpleTemplates:
                 context["is_pro"] = is_pro_license()
             except Exception:
                 context["is_pro"] = False
+        if "has_license" not in context:
+            try:
+                context["has_license"] = get_license_tier() != "none"
+            except Exception:
+                context["has_license"] = False
         if "business_type" not in context:
             try:
                 bt = bk.get_settings().get("business_type", "kleinunternehmer")
@@ -340,6 +345,12 @@ async def auth_middleware(request: Request, call_next):
         return Response(status_code=302, headers={"Location": "/setup"})
     if not _is_authenticated(request):
         return Response(status_code=302, headers={"Location": "/login"})
+    # Lizenz-Gate: ohne gültigen Key (free/pro) nur Einstellungen + Lizenz-Aktivierung.
+    # Öffentlich bleiben: /settings (GET), /settings/license (POST), /logout, API zahlt 402.
+    if get_license_tier() == "none" and path not in ("/settings", "/settings/license", "/logout"):
+        if path.startswith("/api/") or path in ("/generate-pdf", "/drafts/save"):
+            return Response(status_code=402, content="Lizenz erforderlich – bitte Key unter Einstellungen → Lizenz eintragen.")
+        return Response(status_code=302, headers={"Location": "/settings?license_required=1"})
     if request.method == "POST" and path not in CSRF_EXEMPT:
         try:
             # body() ZUERST aufrufen: cached den Body, damit Downstream
@@ -1849,7 +1860,7 @@ async def datev_export(year: Optional[int] = None):
 # ---------------------------------------------------------------------------
 
 @app.get("/settings")
-async def settings_page(request: Request):
+async def settings_page(request: Request, license_required: int = 0):
     settings = bk.get_settings()
     settings["has_custom_logo"] = os.path.exists(CUSTOM_LOGO_PATH)
     return templates.TemplateResponse("settings.html", {
@@ -1858,6 +1869,7 @@ async def settings_page(request: Request):
         "settings": settings,
         "message": None,
         "license_status": get_license_status(),
+        "license_required": bool(license_required),
     })
 
 

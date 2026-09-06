@@ -12,6 +12,13 @@
     {{ message }}
 </div>
 {% endif %}
+{% if license_required %}
+<div class="card" style="background: var(--orange-light); border: 1px solid var(--orange); margin-bottom: 20px;">
+    <strong>Noch ein Schritt:</strong> Trage unten deinen Lizenzschlüssel ein (Free-Key gibt's gratis per E-Mail auf
+    <a href="https://btcrechnung.de#preise" target="_blank" style="color: var(--orange);">btcrechnung.de</a>),
+    danach ist die App freigeschaltet.
+</div>
+{% endif %}
 
 <div class="card" id="firma">
     <h2>Firma</h2>

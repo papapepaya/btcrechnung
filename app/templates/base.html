@@ -578,12 +578,13 @@
             <img src="/static/favicon.svg" alt="" width="24" height="24" style="border-radius: 6px;">
             <span>BTCRechnung</span>
         </a>
+        {% if has_license|default(true) %}
         <a href="/dashboard" {% if active_page == 'dashboard' %}class="active"{% endif %}>Übersicht</a>
         <a href="/invoice" {% if active_page == 'invoice' %}class="active"{% endif %}>Rechnung</a>
         <a href="/quotes" {% if active_page == 'quotes' %}class="active"{% endif %}>Angebote</a>
         <a href="/income" {% if active_page == 'income' %}class="active"{% endif %}>Einnahmen</a>
         <a href="/expenses" {% if active_page == 'expenses' %}class="active"{% endif %}>Ausgaben</a>
-        <div class="nav-more {% if active_page in ['timelog', 'assets', 'customers', 'recurring', 'euer', 'ustva', 'bank', 'cashbook'] %}active{% endif %}">
+        <div class="nav-more {% if active_page in ['timelog', 'assets', 'customers', 'recurring', 'euer', 'ustva', 'bank', 'cashbook'] %}active{% endif %}>
             <button class="nav-more-btn" aria-haspopup="true">Mehr ▾</button>
             <div class="nav-more-menu">
                 <a href="/zeiten" {% if active_page == 'timelog' %}class="active"{% endif %}>Zeiten</a>
@@ -595,6 +596,8 @@
                 {% if is_pro %}<a href="/bank" {% if active_page == 'bank' %}class="active"{% endif %}>Bank</a>{% endif %}
                 {% if is_pro %}<a href="/kassenbuch" {% if active_page == 'cashbook' %}class="active"{% endif %}>Kasse</a>{% endif %}
             </div>
+        </div>
+        {% endif %}
         </div>
         <a href="/settings" {% if active_page == 'settings' %}class="active"{% endif %} style="margin-left: auto;">⚙ Einstellungen</a>
         <button class="theme-toggle" id="themeToggle" title="Dark Mode umschalten">☀</button>
