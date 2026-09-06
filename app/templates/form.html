@@ -346,6 +346,14 @@
 
             if (!resp.ok) {
                 const err = await resp.json();
+                if (resp.status === 402) {
+                    error.innerHTML = 'Free-Limit erreicht (3 Rechnungen/Monat). ' +
+                        '<a href="https://btcrechnung.de#preise" target="_blank" style="color:var(--orange);">Jetzt upgraden →</a>';
+                    error.classList.add('active');
+                    btn.disabled = false;
+                    loading.classList.remove('active');
+                    return;
+                }
                 throw new Error(err.detail || 'Unbekannter Fehler');
             }
 

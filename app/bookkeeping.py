@@ -1222,6 +1222,14 @@ def afa_total(year: int) -> float:
     return round(sum(e["afa"] for e in afa_for_year(year)), 2)
 
 
+def invoices_this_month(year_month: str | None = None) -> list:
+    """Alle nicht-stornierten Rechnungen/Gutschriften des Monats (YYYY-MM)."""
+    import datetime as _dt
+    ym = year_month or _dt.date.today().strftime("%Y-%m")
+    return [i for i in get_all_invoices()
+            if (i.get("date") or "").startswith(ym) and i.get("status") != "storniert"]
+
+
 # ---------------------------------------------------------------------------
 # Calculations
 # ---------------------------------------------------------------------------

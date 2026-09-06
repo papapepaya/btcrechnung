@@ -175,17 +175,37 @@ def is_pro_license() -> bool:
     )
 
 
+def get_license_tier() -> str:
+    """Gibt 'pro', 'free' oder 'none' zurück."""
+    from .license import license_tier
+    settings = bk.get_settings()
+    return license_tier(settings.get("license_email", ""),
+                        settings.get("license_key", ""),
+                        settings.get("license_salt"))
+
+
+def free_limit_reached() -> bool:
+    """True wenn Free-Tarif am Monatslimit (3 Rechnungen) ist. Pro/unlizenziert: False."""
+    from .license import FREE_MONTHLY_LIMIT
+    if get_license_tier() != "free":
+        return False
+    return len(bk.invoices_this_month()) >= FREE_MONTHLY_LIMIT
+
+
 def get_license_status() -> dict:
     """Gibt den Lizenzstatus zurück."""
     settings = bk.get_settings()
     email = settings.get("license_email", "")
     key = settings.get("license_key", "")
     is_valid = verify_license(email, key) if email and key else False
+    tier = get_license_tier()
     return {
         "email": email,
         "key": key,
         "is_valid": is_valid,
-        "type": "pro" if is_valid else "basic",
+        "type": "pro" if tier == "pro" else ("free" if tier == "free" else "basic"),
+        "free_used": len(bk.invoices_this_month()) if tier == "free" else 0,
+        "free_limit": 3,
     }
 
 
@@ -705,6 +725,8 @@ async def quotes_convert(quote_id: str, request: Request):
     pro = is_pro_license()
     if not pro:
         business_type = "kleinunternehmer"
+    if free_limit_reached():
+        raise HTTPException(status_code=402, detail="Free-Limit erreicht (3 Rechnungen/Monat). Upgrade auf Basic oder Pro für unbegrenzte Rechnungen.")
     logo_path = get_logo_path()
     result = invmod.create_invoice(
         {"customer_name": q.get("customer_name"), "customer_address": q.get("customer_address"),
@@ -796,6 +818,8 @@ async def assets_delete(row_id: int):
 
 def _recurring_create_fn(payload: dict) -> dict:
     from . import invoicing as invmod
+    if free_limit_reached():
+        raise ValueError("Free-Limit erreicht (3 Rechnungen/Monat) – Abo übersprungen.")
     settings = bk.get_settings()
     biz = get_business_info()
     btc_rate = get_btc_price_eur()
@@ -1124,6 +1148,8 @@ async def generate_pdf(request: InvoiceRequest):
             "invoice_date": request.invoice_date,
             "buyer_reference": request.buyer_reference,
         }
+        if not request.preview and free_limit_reached():
+            raise HTTPException(status_code=402, detail="Free-Limit erreicht (3 Rechnungen/Monat). Upgrade auf Basic oder Pro für unbegrenzte Rechnungen.")
         logo_path = get_logo_path()
         result = invmod.create_invoice(
             payload, settings=settings, biz=biz, jinja_env=env, pdf_dir=PDF_DIR,
@@ -1957,8 +1983,11 @@ async def settings_license(request: Request):
     license_valid = False
     if email and key:
         if verify_license(email, key):
-            license_message = "Business-Lizenz aktiviert!"
             license_valid = True
+            if key.strip().upper().startswith("FREE-"):
+                license_message = "Free-Tarif aktiviert (3 Rechnungen/Monat)!"
+            else:
+                license_message = "Business-Lizenz aktiviert!"
         else:
             license_message = "Ungültiger Lizenzschlüssel oder falsche E-Mail."
     elif email or key:

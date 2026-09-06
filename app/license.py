@@ -3,6 +3,8 @@ import hashlib
 import hmac
 
 LEGACY_SECRET = "BTCRechnung-2026-Secret-Key"
+FREE_SECRET = "BTCRechnung-Free-2026"
+FREE_MONTHLY_LIMIT = 3
 VENDOR_ED25519_PUB_HEX = "38fe65c525f9f6f3f02a0e140a9583a7198d5918a595da2e75702613276bc99b"
 
 
@@ -51,14 +53,37 @@ def verify_legacy(email: str, license_key: str, salt: str | None = None) -> bool
     return hmac.compare_digest(legacy_key_for(email, LEGACY_SECRET), given)
 
 
+def free_key_for(email: str) -> str:
+    k = hmac.new(FREE_SECRET.encode(), email.lower().encode(), hashlib.sha256).hexdigest()[:20]
+    return "FREE-" + "-".join([k[i:i + 4].upper() for i in range(0, 20, 4)])
+
+
+def verify_free(email: str, license_key: str) -> bool:
+    if not email or not license_key:
+        return False
+    return hmac.compare_digest(free_key_for(email), license_key.upper().strip())
+
+
 def verify_license(email: str, license_key: str, salt: str | None = None) -> bool:
     if not email or not license_key:
         return False
     lk = license_key.strip().upper()
     if lk.startswith("PRO2-"):
         return verify_ed25519(email, lk)
+    if lk.startswith("FREE-"):
+        return verify_free(email, lk)
     return verify_legacy(email, lk, salt)
 
 
+def license_tier(email: str, license_key: str, salt: str | None = None) -> str:
+    """Gibt 'pro', 'free' oder 'none' zurück."""
+    if not email or not license_key:
+        return "none"
+    lk = license_key.strip().upper()
+    if lk.startswith("FREE-"):
+        return "free" if verify_free(email, lk) else "none"
+    return "pro" if verify_license(email, lk, salt) else "none"
+
+
 def is_pro(email: str, key: str, salt: str | None = None) -> bool:
-    return verify_license(email, key, salt)
+    return verify_license(email, key, salt) and not key.strip().upper().startswith("FREE-")

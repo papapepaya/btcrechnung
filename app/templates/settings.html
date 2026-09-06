@@ -236,9 +236,14 @@
 
 <div class="card" id="lizenz">
     <h2>Lizenz</h2>
-    {% if license_status.is_valid %}
+    {% if license_status.is_valid and license_status.type == 'pro' %}
     <p style="font-size: 0.82rem; color: var(--green); font-weight: 600; margin-bottom: 14px;">
         &#10003; Business-Lizenz aktiv
+    </p>
+    {% elif license_status.type == 'free' %}
+    <p style="font-size: 0.82rem; color: var(--orange); font-weight: 600; margin-bottom: 14px;">
+        Free-Tarif aktiv – {{ license_status.free_used }}/{{ license_status.free_limit }} Rechnungen diesen Monat.
+        <a href="{{ purchase_url }}" style="color: var(--orange);">Unbegrenzt mit Basic/Business &#8594;</a>
     </p>
     {% else %}
     <p style="font-size: 0.82rem; color: var(--gray-600); margin-bottom: 14px;">
@@ -260,7 +265,7 @@
         <div class="form-row">
             <div class="field">
                 <label>Lizenzschlüssel</label>
-                <input type="text" name="license_key" value="{{ settings.license_key or '' }}" placeholder="PRO-XXXX-XXXX-XXXX-XXXX" style="font-family: monospace;" spellcheck="false" autocomplete="off">
+                <input type="text" name="license_key" value="{{ settings.license_key or '' }}" placeholder="PRO-… / FREE-…" style="font-family: monospace;" spellcheck="false" autocomplete="off">
                 {% if license_message %}
                 <p class="hint" style="color: {% if license_valid %}var(--green){% else %}var(--red){% endif %};">
                     {{ license_message }}
