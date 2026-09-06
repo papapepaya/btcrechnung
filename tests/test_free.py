@@ -16,6 +16,27 @@ def test_pro_not_free():
     assert not is_pro("free@test.de", free_key_for("free@test.de"))
 
 
+def test_main_wrapper_free():
+    from app.main import verify_license, is_pro_license
+    from app import bookkeeping as bk
+    from app.license import free_key_for
+    s = bk.get_settings()
+    old_email, old_key = s.get("license_email", ""), s.get("license_key", "")
+    try:
+        assert verify_license("free@test.de", free_key_for("free@test.de"))
+        assert not verify_license("free@test.de", "FREE-AAAA-BBBB-CCCC-DDDD")
+        s["license_email"] = "free@test.de"
+        s["license_key"] = free_key_for("free@test.de")
+        bk.save_settings(s)
+        assert not is_pro_license()
+        from app.main import get_license_tier
+        assert get_license_tier() == "free"
+    finally:
+        s["license_email"] = old_email
+        s["license_key"] = old_key
+        bk.save_settings(s)
+
+
 def test_monthly_count():
     from app import bookkeeping as bk
     import datetime

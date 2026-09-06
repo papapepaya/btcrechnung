@@ -160,6 +160,8 @@ def verify_license(email: str, license_key: str) -> bool:
     lk = license_key.strip()
     if lk.upper().startswith("PRO2-"):
         return licmod.verify_ed25519(email, lk)
+    if lk.upper().startswith("FREE-"):
+        return licmod.verify_free(email, lk)
     settings = bk.get_settings()
     if licmod.verify_legacy(email, lk, settings.get("license_salt")):
         return True
@@ -167,11 +169,14 @@ def verify_license(email: str, license_key: str) -> bool:
 
 
 def is_pro_license() -> bool:
-    """Prüft ob eine gültige Pro-Lizenz vorhanden ist."""
+    """Prüft ob eine gültige Pro-Lizenz vorhanden ist (Free-Keys zählen nicht)."""
     settings = bk.get_settings()
+    key = settings.get("license_key", "")
+    if key.strip().upper().startswith("FREE-"):
+        return False
     return verify_license(
         settings.get("license_email", ""),
-        settings.get("license_key", "")
+        key
     )
 
 
