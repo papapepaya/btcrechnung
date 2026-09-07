@@ -8,6 +8,15 @@ def test_free_key():
     assert license_tier("x@y.de", "PRO-AAAA-BBBB-CCCC-DDDD", None) == "none"
 
 
+def test_basic_key():
+    from app.license import basic_key_for, verify_basic, license_tier
+    k = basic_key_for("b@test.de")
+    assert k.startswith("BASIC-")
+    assert verify_basic("b@test.de", k)
+    assert not verify_basic("other@test.de", k)
+    assert license_tier("b@test.de", k, None) == "basic"
+
+
 def test_pro_not_free():
     from app.license import is_pro, legacy_key_for
     k = legacy_key_for("p@test.de", "BTCRechnung-2026-Secret-Key")

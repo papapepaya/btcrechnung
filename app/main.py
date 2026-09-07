@@ -110,6 +110,12 @@ class SimpleTemplates:
         if "purchase_url" not in context:
             context["purchase_url"] = os.environ.get(
                 "PURCHASE_URL", "https://buy.stripe.com/8x2eV64zxeFh7F9bf628804")
+        if "app_version" not in context:
+            try:
+                from .version import get_version
+                context["app_version"] = get_version()
+            except Exception:
+                context["app_version"] = "?"
         html = self.env.get_template(name).render(**context)
         return HTMLResponse(html, status_code=status_code)
 
@@ -167,6 +173,8 @@ def verify_license(email: str, license_key: str) -> bool:
         return licmod.verify_ed25519(email, lk)
     if lk.upper().startswith("FREE-"):
         return licmod.verify_free(email, lk)
+    if lk.upper().startswith("BASIC-"):
+        return licmod.verify_basic(email, lk)
     settings = bk.get_settings()
     if licmod.verify_legacy(email, lk, settings.get("license_salt")):
         return True
@@ -177,7 +185,7 @@ def is_pro_license() -> bool:
     """Prüft ob eine gültige Pro-Lizenz vorhanden ist (Free-Keys zählen nicht)."""
     settings = bk.get_settings()
     key = settings.get("license_key", "")
-    if key.strip().upper().startswith("FREE-"):
+    if key.strip().upper().startswith(("FREE-", "BASIC-")):
         return False
     return verify_license(
         settings.get("license_email", ""),
@@ -2003,6 +2011,8 @@ async def settings_license(request: Request):
             license_valid = True
             if key.strip().upper().startswith("FREE-"):
                 license_message = "Free-Tarif aktiviert (3 Rechnungen/Monat)!"
+            elif key.strip().upper().startswith("BASIC-"):
+                license_message = "Basic-Lizenz aktiviert (unbegrenzte Rechnungen)!"
             else:
                 license_message = "Business-Lizenz aktiviert!"
         else:

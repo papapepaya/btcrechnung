@@ -31,6 +31,10 @@
         Free-Tarif aktiv – {{ license_status.free_used }}/{{ license_status.free_limit }} Rechnungen diesen Monat.
         <a href="{{ purchase_url }}" style="color: var(--orange);">Unbegrenzt mit Basic/Business &#8594;</a>
     </p>
+    {% elif license_status.type == 'basic' %}
+    <p style="font-size: 0.82rem; color: var(--green); font-weight: 600; margin-bottom: 14px;">
+        &#10003; Basic-Lizenz aktiv (unbegrenzte Rechnungen, Kleinunternehmer).
+    </p>
     {% else %}
     <p style="font-size: 0.82rem; color: var(--gray-600); margin-bottom: 14px;">
         <span style="color: var(--orange);">Noch keine Lizenz aktiv</span> – trage unten deinen Schlüssel ein
@@ -319,7 +323,7 @@
     <table style="font-size: 0.88rem;">
         <tr>
             <td style="padding: 6px 20px 6px 0; color: var(--gray-600);">Version</td>
-            <td>1.0.0</td>
+            <td>{{ app_version }}</td>
         </tr>
         <tr>
             <td style="padding: 6px 20px 6px 0; color: var(--gray-600);">Lizenz</td>
