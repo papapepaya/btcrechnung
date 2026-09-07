@@ -216,12 +216,12 @@ def get_license_status() -> dict:
     email = settings.get("license_email", "")
     key = settings.get("license_key", "")
     is_valid = verify_license(email, key) if email and key else False
-    tier = get_license_tier()
+    tier = get_license_tier() if is_valid else "none"
     return {
         "email": email,
         "key": key,
         "is_valid": is_valid,
-        "type": "pro" if tier == "pro" else ("free" if tier == "free" else "basic"),
+        "type": tier,
         "free_used": len(bk.invoices_this_month()) if tier == "free" else 0,
         "free_limit": 3,
     }
