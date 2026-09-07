@@ -47,6 +47,20 @@
                 <input type="email" name="license_email" value="{{ settings.license_email or '' }}" placeholder="kunde@example.com">
             </div>
         </div>
+        <div class="form-row">
+            <div class="field">
+                <label>Lizenzschlüssel</label>
+                <input type="text" name="license_key" value="{{ settings.license_key or '' }}" placeholder="PRO-… / FREE-…" style="font-family: monospace;" spellcheck="false" autocomplete="off">
+                {% if license_message %}
+                <p class="hint" style="color: {% if license_valid %}var(--green){% else %}var(--red){% endif %};">
+                    {{ license_message }}
+                </p>
+                {% endif %}
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Lizenz aktivieren</button>
+    </form>
+</div>
 
 <div class="card" id="firma">
     <h2>Firma</h2>
@@ -266,21 +280,6 @@
         <div class="actions">
             <button type="submit" class="btn btn-primary">Speichern</button>
         </div>
-    </form>
-</div>
-
-        <div class="form-row">
-            <div class="field">
-                <label>Lizenzschlüssel</label>
-                <input type="text" name="license_key" value="{{ settings.license_key or '' }}" placeholder="PRO-… / FREE-…" style="font-family: monospace;" spellcheck="false" autocomplete="off">
-                {% if license_message %}
-                <p class="hint" style="color: {% if license_valid %}var(--green){% else %}var(--red){% endif %};">
-                    {{ license_message }}
-                </p>
-                {% endif %}
-            </div>
-        </div>
-        <button type="submit" class="btn btn-primary">Lizenz aktivieren</button>
     </form>
 </div>
 
